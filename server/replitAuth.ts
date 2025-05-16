@@ -54,7 +54,7 @@ function updateUserSession(
   user.expires_at = user.claims?.exp;
 }
 
-async function upsertUser(
+export async function upsertUser(
   claims: any,
 ) {
   await storage.upsertUser({
@@ -128,10 +128,13 @@ export async function setupAuth(app: Express) {
 }
 
 export const isAuthenticated: RequestHandler = async (req, res, next) => {
-  const user = req.user as any;
-
-  if (!req.isAuthenticated() || !user.expires_at) {
+  if (!req.isAuthenticated()) {
     return res.status(401).json({ message: "Unauthorized" });
+  }
+
+  const user = req.user as any;
+  if (!user || !user.expires_at) {
+    return res.status(401).json({ message: "Unauthorized - Missing user data" });
   }
 
   const now = Math.floor(Date.now() / 1000);
@@ -150,6 +153,7 @@ export const isAuthenticated: RequestHandler = async (req, res, next) => {
     updateUserSession(user, tokenResponse);
     return next();
   } catch (error) {
+    console.error("Error refreshing token:", error);
     return res.redirect("/api/login");
   }
 };

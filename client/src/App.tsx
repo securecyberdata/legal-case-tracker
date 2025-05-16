@@ -4,6 +4,7 @@ import { QueryClientProvider } from "@tanstack/react-query";
 import { Toaster } from "@/components/ui/toaster";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { useAuth } from "./hooks/useAuth";
+import { useEffect } from "react";
 import NotFound from "@/pages/not-found";
 import Dashboard from "@/pages/dashboard";
 import Layout from "@/components/layout/layout";
@@ -18,7 +19,7 @@ import Login from "@/pages/login";
 // Protected route component
 const ProtectedRoute = ({ component: Component, ...rest }: any) => {
   const { isAuthenticated, isLoading } = useAuth();
-  const [, setLocation] = useLocation();
+  const [location, setLocation] = useLocation();
 
   // Show loading state while checking auth
   if (isLoading) {
@@ -30,8 +31,15 @@ const ProtectedRoute = ({ component: Component, ...rest }: any) => {
   }
 
   // Redirect to login if not authenticated
-  if (!isAuthenticated) {
-    setLocation("/login");
+  // Use useEffect to avoid setState during render
+  useEffect(() => {
+    if (!isLoading && !isAuthenticated && location !== "/login") {
+      setLocation("/login");
+    }
+  }, [isLoading, isAuthenticated, location, setLocation]);
+
+  // Don't render protected component if not authenticated
+  if (!isAuthenticated && !isLoading) {
     return null;
   }
 

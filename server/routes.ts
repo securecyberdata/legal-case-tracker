@@ -1,7 +1,7 @@
 import type { Express } from "express";
 import { createServer, type Server } from "http";
 import { storage } from "./storage";
-import { setupAuth, isAuthenticated } from "./replitAuth";
+import { setupAuth, isAuthenticated, upsertUser } from "./replitAuth";
 import { insertCaseSchema, insertClientSchema, insertHearingSchema, insertActivitySchema } from "@shared/schema";
 import { format } from "date-fns";
 
@@ -10,10 +10,26 @@ export async function registerRoutes(app: Express): Promise<Server> {
   await setupAuth(app);
 
   // Auth routes
-  app.get('/api/auth/user', isAuthenticated, async (req: any, res) => {
+  app.get('/api/auth/user', async (req: any, res) => {
+    if (!req.isAuthenticated()) {
+      return res.status(401).json({ message: "Unauthorized" });
+    }
+    
     try {
       const userId = req.user.claims.sub;
       const user = await storage.getUser(userId);
+      
+      if (!user) {
+        // Create the user if they don't exist yet (first login)
+        if (req.user.claims) {
+          await upsertUser(req.user.claims);
+          const newUser = await storage.getUser(userId);
+          return res.json(newUser);
+        } else {
+          return res.status(404).json({ message: "User not found and couldn't be created" });
+        }
+      }
+      
       res.json(user);
     } catch (error) {
       console.error("Error fetching user:", error);
