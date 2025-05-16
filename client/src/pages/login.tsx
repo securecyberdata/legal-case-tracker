@@ -6,7 +6,7 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
 
 export default function Login() {
-  const { user, isAuthenticated, isLoading } = useAuth();
+  const { user, isAuthenticated, isLoading, login } = useAuth();
   const [, navigate] = useLocation();
 
   // Redirect to dashboard if already authenticated
@@ -15,13 +15,6 @@ export default function Login() {
       navigate("/");
     }
   }, [isAuthenticated, navigate]);
-
-  // Redirect when login completes
-  useEffect(() => {
-    if (user) {
-      navigate("/");
-    }
-  }, [user, navigate]);
 
   if (isLoading) {
     return (
@@ -86,9 +79,7 @@ export default function Login() {
               <Button
                 className="w-full"
                 size="lg"
-                onClick={() => {
-                  window.location.href = "/api/login";
-                }}
+                onClick={login}
               >
                 Sign in to your account
                 <ChevronRight className="ml-2 h-4 w-4" />

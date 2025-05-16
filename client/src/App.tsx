@@ -4,7 +4,7 @@ import { QueryClientProvider } from "@tanstack/react-query";
 import { Toaster } from "@/components/ui/toaster";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { useAuth } from "./hooks/useAuth";
-import { useEffect } from "react";
+import { useEffect, ReactNode } from "react";
 import NotFound from "@/pages/not-found";
 import Dashboard from "@/pages/dashboard";
 import Layout from "@/components/layout/layout";
@@ -17,9 +17,20 @@ import Calendar from "@/pages/calendar";
 import Login from "@/pages/login";
 
 // Protected route component
-const ProtectedRoute = ({ component: Component, ...rest }: any) => {
+interface ProtectedRouteProps {
+  component: React.ComponentType<any>;
+  children?: ReactNode;
+}
+
+const ProtectedRoute = ({ component: Component, children, ...rest }: ProtectedRouteProps) => {
   const { isAuthenticated, isLoading } = useAuth();
-  const [location, setLocation] = useLocation();
+  const [, navigate] = useLocation();
+
+  useEffect(() => {
+    if (!isLoading && !isAuthenticated) {
+      navigate("/login");
+    }
+  }, [isLoading, isAuthenticated, navigate]);
 
   // Show loading state while checking auth
   if (isLoading) {
@@ -30,21 +41,13 @@ const ProtectedRoute = ({ component: Component, ...rest }: any) => {
     );
   }
 
-  // Redirect to login if not authenticated
-  // Use useEffect to avoid setState during render
-  useEffect(() => {
-    if (!isLoading && !isAuthenticated && location !== "/login") {
-      setLocation("/login");
-    }
-  }, [isLoading, isAuthenticated, location, setLocation]);
-
   // Don't render protected component if not authenticated
-  if (!isAuthenticated && !isLoading) {
+  if (!isAuthenticated) {
     return null;
   }
 
   // Render the protected component
-  return <Component {...rest} />;
+  return <Component {...rest}>{children}</Component>;
 };
 
 function Router() {
