@@ -5,11 +5,6 @@ import type { Express, RequestHandler } from "express";
 import connectPg from "connect-pg-simple";
 import { storage } from "./storage";
 
-// Check for required environment variables
-if (!process.env.REPLIT_DOMAINS) {
-  throw new Error("Environment variable REPLIT_DOMAINS not provided");
-}
-
 // Create session middleware
 export function getSession() {
   const sessionTtl = 7 * 24 * 60 * 60 * 1000; // 1 week
@@ -21,31 +16,28 @@ export function getSession() {
     tableName: "sessions",
   });
   
-  const isProduction = process.env.NODE_ENV === 'production';
-  
   return session({
-    secret: process.env.SESSION_SECRET!,
+    secret: process.env.SESSION_SECRET || "lawcasepro-session-secret",
     store: sessionStore,
     resave: false,
     saveUninitialized: false,
     cookie: {
       httpOnly: true,
-      secure: isProduction,
-      sameSite: 'lax',
+      secure: false, // Set to true in production with HTTPS
       maxAge: sessionTtl,
     },
   });
 }
 
 // Create or update a user in the database
-export async function upsertUser(profile: any) {
+export async function upsertUser(userProfile: any) {
   try {
     return await storage.upsertUser({
-      id: profile.id,
-      email: profile.email,
-      firstName: profile.given_name,
-      lastName: profile.family_name,
-      profileImageUrl: profile.picture,
+      id: userProfile.id.toString(),
+      email: userProfile.email,
+      firstName: userProfile.first_name || userProfile.name,
+      lastName: userProfile.last_name,
+      profileImageUrl: userProfile.profile_image,
     });
   } catch (error) {
     console.error("Failed to upsert user:", error);
@@ -53,100 +45,76 @@ export async function upsertUser(profile: any) {
   }
 }
 
+// A simple implementation for demo purposes
+// In a real app, you'd use a complete OAuth2 flow
+function generateMockUserProfile(username: string) {
+  const userId = Math.floor(Math.random() * 1000000).toString();
+  return {
+    id: userId,
+    email: `${username}@example.com`,
+    first_name: username,
+    last_name: "User",
+    name: username,
+    profile_image: `https://ui-avatars.com/api/?name=${username}&background=random`,
+  };
+}
+
 // Set up authentication
 export async function setupAuth(app: Express) {
-  // Trust proxies for secure cookies
-  app.set("trust proxy", 1);
-  
   // Set up session middleware
   app.use(getSession());
   app.use(passport.initialize());
   app.use(passport.session());
 
-  try {
-    const domain = process.env.REPLIT_DOMAINS!.split(",")[0];
-    
-    // Configure Replit OAuth2 strategy
-    passport.use(
-      new OAuth2Strategy(
-        {
-          authorizationURL: "https://replit.com/auth_with_repl_site",
-          tokenURL: "https://replit.com/api/v1/oauth/token",
-          clientID: process.env.REPL_ID!,
-          clientSecret: "REPLIT_OAUTH_SECRET", // Not used but required by passport-oauth2
-          callbackURL: `https://${domain}/api/callback`,
-          state: true,
-        },
-        async (accessToken, refreshToken, profile, done) => {
-          try {
-            // Get user info from the access token
-            const response = await fetch("https://replit.com/api/v1/user", {
-              headers: {
-                Authorization: `Bearer ${accessToken}`,
-              },
-            });
-
-            if (!response.ok) {
-              return done(new Error("Failed to fetch user profile"));
-            }
-
-            const userProfile = await response.json();
-            
-            // Create or update user in our database
-            const user = await upsertUser({
-              id: userProfile.id.toString(),
-              email: userProfile.email,
-              given_name: userProfile.firstName,
-              family_name: userProfile.lastName,
-              picture: userProfile.profileImage,
-            });
-            
-            // Store tokens in the user session
-            const sessionUser = {
-              ...user,
-              accessToken,
-              refreshToken,
-              expiresAt: Date.now() + 3600 * 1000, // 1 hour expiry
-            };
-            
-            return done(null, sessionUser);
-          } catch (error) {
-            return done(error);
-          }
-        }
-      )
-    );
-
-    // Configure passport serialization
-    passport.serializeUser((user, done) => {
-      done(null, user);
+  // Simple login handler for development
+  app.get('/api/login', (req, res) => {
+    // For demo purposes, we generate a mock user
+    const demoUser = generateMockUserProfile("Demo");
+    req.login(demoUser, async (err) => {
+      if (err) {
+        console.error("Login error:", err);
+        return res.redirect('/login?error=true');
+      }
+      
+      try {
+        // Create or update user in database
+        await upsertUser(demoUser);
+        return res.redirect('/');
+      } catch (error) {
+        console.error("User creation error:", error);
+        return res.redirect('/login?error=true');
+      }
     });
+  });
 
-    passport.deserializeUser((user, done) => {
-      done(null, user);
+  // Simple logout handler
+  app.get('/api/logout', (req, res) => {
+    req.logout((err) => {
+      if (err) {
+        console.error("Logout error:", err);
+      }
+      res.redirect('/login');
     });
+  });
 
-    // Set up routes
-    app.get("/api/login", passport.authenticate("oauth2"));
+  // User API endpoint
+  app.get('/api/auth/user', (req, res) => {
+    if (req.isAuthenticated() && req.user) {
+      return res.json(req.user);
+    }
+    return res.status(401).json({ message: "Unauthorized" });
+  });
 
-    app.get(
-      "/api/callback",
-      passport.authenticate("oauth2", {
-        successRedirect: "/",
-        failureRedirect: "/login",
-      })
-    );
+  // Configure passport serialization
+  passport.serializeUser((user, done) => {
+    done(null, user);
+  });
 
-    app.get("/api/logout", (req, res) => {
-      req.logout(() => {
-        res.redirect("/");
-      });
-    });
-    
-    console.log("Authentication setup completed successfully");
-  } catch (error) {
-    console.error("Authentication setup failed:", error);
-  }
+  passport.deserializeUser((user, done) => {
+    done(null, user);
+  });
+  
+  console.log("Authentication setup completed successfully");
 }
 
 // Middleware to check if user is authenticated
