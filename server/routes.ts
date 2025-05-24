@@ -151,7 +151,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(404).json({ message: "Case not found" });
       }
       
-      if (existingCase.userId !== userId) {
+      const authUserId = req.user.id || req.user.claims?.sub;
+      if (existingCase.userId !== authUserId) {
         return res.status(403).json({ message: "Not authorized" });
       }
       
@@ -185,7 +186,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(404).json({ message: "Case not found" });
       }
       
-      if (existingCase.userId !== userId) {
+      const authUserId = req.user.id || req.user.claims?.sub;
+      if (existingCase.userId !== authUserId) {
         return res.status(403).json({ message: "Not authorized" });
       }
       
@@ -297,7 +299,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(404).json({ message: "Client not found" });
       }
       
-      if (existingClient.userId !== userId) {
+      const authUserId = req.user.id || req.user.claims?.sub;
+      if (existingClient.userId !== authUserId) {
         return res.status(403).json({ message: "Not authorized" });
       }
       
@@ -331,7 +334,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(404).json({ message: "Client not found" });
       }
       
-      if (existingClient.userId !== userId) {
+      const authUserId = req.user.id || req.user.claims?.sub;
+      if (existingClient.userId !== authUserId) {
         return res.status(403).json({ message: "Not authorized" });
       }
       
@@ -414,7 +418,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(404).json({ message: "Hearing not found" });
       }
       
-      if (hearing.userId !== req.user.claims.sub) {
+      const userId = req.user.id || req.user.claims?.sub;
+      if (hearing.userId !== userId) {
         return res.status(403).json({ message: "Not authorized" });
       }
       
