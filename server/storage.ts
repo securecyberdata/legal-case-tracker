@@ -213,7 +213,14 @@ export class DatabaseStorage implements IStorage {
   }
 
   async createClient(data: InsertClient & { userId: string }): Promise<Client> {
-    const [newClient] = await db.insert(clients).values(data).returning();
+    // Generate a random UUID for the client if not provided
+    const { v4: uuidv4 } = require('uuid');
+    const clientData = {
+      ...data,
+      clientUuid: data.clientUuid || uuidv4()
+    };
+    
+    const [newClient] = await db.insert(clients).values(clientData).returning();
     return newClient;
   }
 

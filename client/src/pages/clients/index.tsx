@@ -219,6 +219,7 @@ export default function ClientsIndex() {
                 <TableHeader>
                   <TableRow>
                     <TableHead>Name</TableHead>
+                    <TableHead>Client ID</TableHead>
                     <TableHead>Contact Number</TableHead>
                     <TableHead>Email</TableHead>
                     <TableHead>Address</TableHead>
@@ -237,6 +238,11 @@ export default function ClientsIndex() {
                           </Avatar>
                           {client.name}
                         </Link>
+                      </TableCell>
+                      <TableCell>
+                        <span className="font-mono text-xs text-muted-foreground">
+                          {client.clientUuid || "—"}
+                        </span>
                       </TableCell>
                       <TableCell>{client.contactNumber || "—"}</TableCell>
                       <TableCell>{client.email || "—"}</TableCell>
@@ -289,6 +295,9 @@ export default function ClientsIndex() {
                       </Avatar>
                       <div className="ml-4">
                         <h3 className="font-medium">{client.name}</h3>
+                        <div className="text-xs text-muted-foreground font-mono mb-1">
+                          ID: {client.clientUuid ? client.clientUuid.substring(0, 8) + '...' : '—'}
+                        </div>
                         <Link href={`/clients/${client.id}`} className="text-sm text-primary hover:underline">
                           View details
                         </Link>
