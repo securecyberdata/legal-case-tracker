@@ -9,6 +9,7 @@ import {
   date,
   primaryKey,
   integer,
+  uuid,
 } from "drizzle-orm/pg-core";
 import { createInsertSchema } from "drizzle-zod";
 import { z } from "zod";
@@ -82,6 +83,7 @@ export const cases = pgTable("cases", {
 // Clients table
 export const clients = pgTable("clients", {
   id: serial("id").primaryKey(),
+  clientUuid: uuid("client_uuid").defaultRandom().notNull(),
   name: varchar("name", { length: 100 }).notNull(),
   contactNumber: varchar("contact_number", { length: 20 }),
   email: varchar("email", { length: 100 }),
