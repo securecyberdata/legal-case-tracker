@@ -16,21 +16,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
     
     try {
-      const userId = req.user.claims.sub;
-      const user = await storage.getUser(userId);
-      
-      if (!user) {
-        // Create the user if they don't exist yet (first login)
-        if (req.user.claims) {
-          await upsertUser(req.user.claims);
-          const newUser = await storage.getUser(userId);
-          return res.json(newUser);
-        } else {
-          return res.status(404).json({ message: "User not found and couldn't be created" });
-        }
-      }
-      
-      res.json(user);
+      // Simply return the user from the session
+      res.json(req.user);
     } catch (error) {
       console.error("Error fetching user:", error);
       res.status(500).json({ message: "Failed to fetch user" });

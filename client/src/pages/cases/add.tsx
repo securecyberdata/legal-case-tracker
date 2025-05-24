@@ -44,6 +44,8 @@ import { CASE_STATUSES, COURT_TYPES, insertCaseSchema } from '@shared/schema';
 // Extend the schema with client-side validation
 const formSchema = insertCaseSchema.extend({
   clientId: z.number().optional(),
+  documents: z.string().optional(),
+  previousMessages: z.string().optional(),
 });
 
 export default function CaseAdd() {
@@ -56,7 +58,11 @@ export default function CaseAdd() {
   const form = useForm<z.infer<typeof formSchema>>({
     resolver: zodResolver(formSchema),
     defaultValues: {
+      applicationNumber: '',
       caseNumber: generateCaseNumber(),
+      firNumber: '',
+      plaintiffName: '',
+      defendantName: '',
       title: '',
       description: '',
       courtName: '',
@@ -65,6 +71,8 @@ export default function CaseAdd() {
       filingDate: new Date(),
       nextHearingDate: undefined,
       clientId: undefined,
+      documents: '',
+      previousMessages: '',
     }
   });
 
@@ -129,12 +137,42 @@ export default function CaseAdd() {
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                   <FormField
                     control={form.control}
+                    name="applicationNumber"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>Application Number</FormLabel>
+                        <FormControl>
+                          <Input {...field} placeholder="Enter application number" />
+                        </FormControl>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+                  
+                  <FormField
+                    control={form.control}
                     name="caseNumber"
                     render={({ field }) => (
                       <FormItem>
                         <FormLabel>Case Number</FormLabel>
                         <FormControl>
                           <Input {...field} />
+                        </FormControl>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+                </div>
+                
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                  <FormField
+                    control={form.control}
+                    name="firNumber"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>FIR Number</FormLabel>
+                        <FormControl>
+                          <Input {...field} placeholder="Enter FIR number" />
                         </FormControl>
                         <FormMessage />
                       </FormItem>
@@ -164,6 +202,36 @@ export default function CaseAdd() {
                             ))}
                           </SelectContent>
                         </Select>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+                </div>
+                
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                  <FormField
+                    control={form.control}
+                    name="plaintiffName"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>Plaintiff Name</FormLabel>
+                        <FormControl>
+                          <Input {...field} placeholder="Enter plaintiff name" />
+                        </FormControl>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+                  
+                  <FormField
+                    control={form.control}
+                    name="defendantName"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>Defendant Name</FormLabel>
+                        <FormControl>
+                          <Input {...field} placeholder="Enter defendant name" />
+                        </FormControl>
                         <FormMessage />
                       </FormItem>
                     )}
@@ -322,6 +390,48 @@ export default function CaseAdd() {
                           />
                         </PopoverContent>
                       </Popover>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+                
+                <FormField
+                  control={form.control}
+                  name="documents"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Document Attachments</FormLabel>
+                      <FormControl>
+                        <div className="flex flex-col gap-2">
+                          <Textarea 
+                            {...field} 
+                            placeholder="Enter document references or upload information" 
+                            className="min-h-[80px]"
+                          />
+                          <Button type="button" variant="outline" className="w-full">
+                            <Upload className="mr-2 h-4 w-4" />
+                            Attach Documents
+                          </Button>
+                        </div>
+                      </FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+                
+                <FormField
+                  control={form.control}
+                  name="previousMessages"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Previous Messages</FormLabel>
+                      <FormControl>
+                        <Textarea 
+                          {...field} 
+                          placeholder="Enter any previous messages or notes related to this case" 
+                          className="min-h-[120px]"
+                        />
+                      </FormControl>
                       <FormMessage />
                     </FormItem>
                   )}

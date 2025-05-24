@@ -59,7 +59,11 @@ export const COURT_TYPES = [
 // Cases table
 export const cases = pgTable("cases", {
   id: serial("id").primaryKey(),
+  applicationNumber: varchar("application_number", { length: 50 }),
   caseNumber: varchar("case_number", { length: 50 }).notNull(),
+  firNumber: varchar("fir_number", { length: 50 }),
+  plaintiffName: varchar("plaintiff_name", { length: 100 }),
+  defendantName: varchar("defendant_name", { length: 100 }),
   title: varchar("title", { length: 200 }).notNull(),
   description: text("description"),
   courtName: varchar("court_name", { length: 100 }).notNull(),
@@ -68,6 +72,8 @@ export const cases = pgTable("cases", {
   filingDate: date("filing_date"),
   nextHearingDate: date("next_hearing_date"),
   clientId: integer("client_id"),
+  documents: text("documents"),
+  previousMessages: text("previous_messages"),
   userId: varchar("user_id").references(() => users.id, { onDelete: "cascade" }),
   createdAt: timestamp("created_at").defaultNow(),
   updatedAt: timestamp("updated_at").defaultNow(),

@@ -35,9 +35,9 @@ export async function upsertUser(userProfile: any) {
     return await storage.upsertUser({
       id: userProfile.id.toString(),
       email: userProfile.email,
-      firstName: userProfile.first_name || userProfile.name,
-      lastName: userProfile.last_name,
-      profileImageUrl: userProfile.profile_image,
+      firstName: userProfile.first_name || userProfile.name || "",
+      lastName: userProfile.last_name || "",
+      profileImageUrl: userProfile.profile_image || "",
     });
   } catch (error) {
     console.error("Failed to upsert user:", error);
