@@ -1,28 +1,55 @@
-import { useEffect } from "react";
-import { useLocation } from "wouter";
-import { useAuth } from "@/hooks/useAuth";
-import { Gavel, ChevronRight } from "lucide-react";
-import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
+import { useState } from 'react';
+import { useForm } from 'react-hook-form';
+import { zodResolver } from '@hookform/resolvers/zod';
+import { z } from 'zod';
+import { Button } from '@/components/ui/button';
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
+import { Input } from '@/components/ui/input';
+import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from '@/components/ui/form';
+import { useToast } from '@/hooks/use-toast';
+import { apiRequest } from '@/lib/queryClient';
+import { Gavel } from 'lucide-react';
+
+const loginSchema = z.object({
+  email: z.string().email('Please enter a valid email address'),
+  password: z.string().min(1, 'Password is required'),
+});
+
+type LoginForm = z.infer<typeof loginSchema>;
 
 export default function Login() {
-  const { user, isAuthenticated, isLoading, login } = useAuth();
-  const [, navigate] = useLocation();
+  const [isLoading, setIsLoading] = useState(false);
+  const { toast } = useToast();
 
-  // Redirect to dashboard if already authenticated
-  useEffect(() => {
-    if (isAuthenticated) {
-      navigate("/");
+  const form = useForm<LoginForm>({
+    resolver: zodResolver(loginSchema),
+    defaultValues: {
+      email: '',
+      password: '',
+    },
+  });
+
+  const onSubmit = async (data: LoginForm) => {
+    setIsLoading(true);
+    try {
+      await apiRequest('POST', '/api/login', data);
+      toast({
+        title: 'Login successful',
+        description: 'Welcome back!',
+      });
+      // Refresh the page to trigger re-authentication
+      window.location.reload();
+    } catch (error) {
+      console.error('Login error:', error);
+      toast({
+        title: 'Login failed',
+        description: 'Please check your credentials and try again.',
+        variant: 'destructive',
+      });
+    } finally {
+      setIsLoading(false);
     }
-  }, [isAuthenticated, navigate]);
-
-  if (isLoading) {
-    return (
-      <div className="flex items-center justify-center min-h-screen bg-neutral-bg">
-        <div className="w-10 h-10 border-4 border-primary border-t-transparent rounded-full animate-spin"></div>
-      </div>
-    );
-  }
+  };
 
   return (
     <div className="flex min-h-screen bg-neutral-bg">
@@ -71,26 +98,59 @@ export default function Login() {
               Sign in to access your legal case management dashboard
             </CardDescription>
           </CardHeader>
-          <CardContent className="space-y-4">
-            <div className="text-center">
-              <p className="text-sm text-neutral-dark mb-4">
-                Click the button below to securely sign in
-              </p>
-              <Button
-                className="w-full"
-                size="lg"
-                onClick={login}
-              >
-                Sign in to your account
-                <ChevronRight className="ml-2 h-4 w-4" />
-              </Button>
+          <CardContent>
+            <Form {...form}>
+              <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4">
+                <FormField
+                  control={form.control}
+                  name="email"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Email</FormLabel>
+                      <FormControl>
+                        <Input 
+                          placeholder="test@test.com" 
+                          type="email"
+                          {...field} 
+                        />
+                      </FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+                
+                <FormField
+                  control={form.control}
+                  name="password"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Password</FormLabel>
+                      <FormControl>
+                        <Input 
+                          placeholder="test123" 
+                          type="password"
+                          {...field} 
+                        />
+                      </FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+
+                <Button type="submit" className="w-full" size="lg" disabled={isLoading}>
+                  {isLoading ? 'Signing in...' : 'Sign in to your account'}
+                </Button>
+              </form>
+            </Form>
+            
+            <div className="mt-6 p-4 bg-neutral-bg rounded-lg">
+              <p className="text-sm font-medium text-center mb-2">Test Credentials</p>
+              <div className="text-xs text-neutral-dark text-center space-y-1">
+                <p><strong>Email:</strong> test@test.com</p>
+                <p><strong>Password:</strong> test123</p>
+              </div>
             </div>
           </CardContent>
-          <CardFooter className="text-center text-sm text-neutral">
-            <p className="w-full">
-              By signing in, you agree to our Terms of Service and Privacy Policy
-            </p>
-          </CardFooter>
         </Card>
       </div>
     </div>

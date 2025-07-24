@@ -1,7 +1,7 @@
 import type { Express } from "express";
 import { createServer, type Server } from "http";
 import { storage } from "./storage";
-import { setupAuth, isAuthenticated, upsertUser } from "./replitAuth";
+import { setupAuth, isAuthenticated } from "./auth";
 import { insertCaseSchema, insertClientSchema, insertHearingSchema, insertActivitySchema } from "@shared/schema";
 import { format } from "date-fns";
 
@@ -9,25 +9,12 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // Setup authentication
   await setupAuth(app);
 
-  // Auth routes
-  app.get('/api/auth/user', async (req: any, res) => {
-    if (!req.isAuthenticated()) {
-      return res.status(401).json({ message: "Unauthorized" });
-    }
-    
-    try {
-      // Simply return the user from the session
-      res.json(req.user);
-    } catch (error) {
-      console.error("Error fetching user:", error);
-      res.status(500).json({ message: "Failed to fetch user" });
-    }
-  });
+  // Auth routes are handled in setupAuth function
 
   // Dashboard stats
   app.get('/api/dashboard/stats', isAuthenticated, async (req: any, res) => {
     try {
-      const userId = req.user.id || req.user.claims?.sub;
+      const userId = req.user.id;
       const stats = await storage.getDashboardStats(userId);
       res.json(stats);
     } catch (error) {
@@ -39,7 +26,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // Case status distribution
   app.get('/api/dashboard/case-statuses', isAuthenticated, async (req: any, res) => {
     try {
-      const userId = req.user.id || req.user.claims?.sub;
+      const userId = req.user.id;
       const statuses = await storage.getCasesByStatuses(userId);
       res.json(statuses);
     } catch (error) {
@@ -51,7 +38,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // Recent activities
   app.get('/api/activities', isAuthenticated, async (req: any, res) => {
     try {
-      const userId = req.user.id || req.user.claims?.sub;
+      const userId = req.user.id;
       const limit = req.query.limit ? parseInt(req.query.limit as string) : 10;
       const activities = await storage.getActivities(userId, limit);
       res.json(activities);
@@ -64,7 +51,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // Cases API
   app.get('/api/cases', isAuthenticated, async (req: any, res) => {
     try {
-      const userId = req.user.id || req.user.claims?.sub;
+      const userId = req.user.id;
       const search = req.query.search as string;
       const status = req.query.status as string;
 
@@ -86,7 +73,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
   app.get('/api/cases/upcoming', isAuthenticated, async (req: any, res) => {
     try {
-      const userId = req.user.id || req.user.claims?.sub;
+      const userId = req.user.id;
       const limit = req.query.limit ? parseInt(req.query.limit as string) : 5;
       const cases = await storage.getUpcomingHearingCases(userId, limit);
       res.json(cases);
@@ -105,7 +92,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(404).json({ message: "Case not found" });
       }
       
-      const userId = req.user.id || req.user.claims?.sub;
+      const userId = req.user.id;
       if (caseData.userId !== userId) {
         return res.status(403).json({ message: "Not authorized" });
       }
@@ -119,7 +106,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
   app.post('/api/cases', isAuthenticated, async (req: any, res) => {
     try {
-      const userId = req.user.id || req.user.claims?.sub;
+      const userId = req.user.id;
       const validatedData = insertCaseSchema.parse(req.body);
       
       const newCase = await storage.createCase({ ...validatedData, userId });
@@ -143,7 +130,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.put('/api/cases/:id', isAuthenticated, async (req: any, res) => {
     try {
       const caseId = parseInt(req.params.id);
-      const userId = req.user.id || req.user.claims?.sub;
+      const userId = req.user.id;
       
       // Verify ownership
       const existingCase = await storage.getCase(caseId);
@@ -151,7 +138,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(404).json({ message: "Case not found" });
       }
       
-      const authUserId = req.user.id || req.user.claims?.sub;
+      const authUserId = req.user.id;
       if (existingCase.userId !== authUserId) {
         return res.status(403).json({ message: "Not authorized" });
       }
@@ -178,7 +165,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.delete('/api/cases/:id', isAuthenticated, async (req: any, res) => {
     try {
       const caseId = parseInt(req.params.id);
-      const userId = req.user.id || req.user.claims?.sub;
+      const userId = req.user.id;
       
       // Verify ownership
       const existingCase = await storage.getCase(caseId);
@@ -186,7 +173,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(404).json({ message: "Case not found" });
       }
       
-      const authUserId = req.user.id || req.user.claims?.sub;
+      const authUserId = req.user.id;
       if (existingCase.userId !== authUserId) {
         return res.status(403).json({ message: "Not authorized" });
       }
@@ -212,7 +199,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // Clients API
   app.get('/api/clients', isAuthenticated, async (req: any, res) => {
     try {
-      const userId = req.user.id || req.user.claims?.sub;
+      const userId = req.user.id;
       const search = req.query.search as string;
       
       let clients;
@@ -231,7 +218,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
   app.get('/api/clients/recent', isAuthenticated, async (req: any, res) => {
     try {
-      const userId = req.user.id || req.user.claims?.sub;
+      const userId = req.user.id;
       const limit = req.query.limit ? parseInt(req.query.limit as string) : 4;
       const clients = await storage.getRecentClients(userId, limit);
       res.json(clients);
@@ -250,7 +237,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(404).json({ message: "Client not found" });
       }
       
-      const userId = req.user.id || req.user.claims?.sub;
+      const userId = req.user.id;
       if (client.userId !== userId) {
         return res.status(403).json({ message: "Not authorized" });
       }
@@ -267,7 +254,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
   app.post('/api/clients', isAuthenticated, async (req: any, res) => {
     try {
-      const userId = req.user.id || req.user.claims?.sub;
+      const userId = req.user.id;
       const validatedData = insertClientSchema.parse(req.body);
       
       const newClient = await storage.createClient({ ...validatedData, userId });
@@ -291,7 +278,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.put('/api/clients/:id', isAuthenticated, async (req: any, res) => {
     try {
       const clientId = parseInt(req.params.id);
-      const userId = req.user.id || req.user.claims?.sub;
+      const userId = req.user.id;
       
       // Verify ownership
       const existingClient = await storage.getClient(clientId);
@@ -299,7 +286,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(404).json({ message: "Client not found" });
       }
       
-      const authUserId = req.user.id || req.user.claims?.sub;
+      const authUserId = req.user.id;
       if (existingClient.userId !== authUserId) {
         return res.status(403).json({ message: "Not authorized" });
       }
@@ -326,7 +313,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.delete('/api/clients/:id', isAuthenticated, async (req: any, res) => {
     try {
       const clientId = parseInt(req.params.id);
-      const userId = req.user.id || req.user.claims?.sub;
+      const userId = req.user.id;
       
       // Verify ownership
       const existingClient = await storage.getClient(clientId);
@@ -334,7 +321,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(404).json({ message: "Client not found" });
       }
       
-      const authUserId = req.user.id || req.user.claims?.sub;
+      const authUserId = req.user.id;
       if (existingClient.userId !== authUserId) {
         return res.status(403).json({ message: "Not authorized" });
       }
@@ -360,7 +347,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // Hearings API
   app.get('/api/hearings', isAuthenticated, async (req: any, res) => {
     try {
-      const userId = req.user.id || req.user.claims?.sub;
+      const userId = req.user.id;
       const caseId = req.query.caseId ? parseInt(req.query.caseId as string) : undefined;
       
       let hearings;
@@ -379,7 +366,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
   app.get('/api/hearings/upcoming', isAuthenticated, async (req: any, res) => {
     try {
-      const userId = req.user.id || req.user.claims?.sub;
+      const userId = req.user.id;
       const limit = req.query.limit ? parseInt(req.query.limit as string) : 5;
       const hearings = await storage.getUpcomingHearings(userId, limit);
       res.json(hearings);
@@ -391,7 +378,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
   app.get('/api/hearings/calendar', isAuthenticated, async (req: any, res) => {
     try {
-      const userId = req.user.id || req.user.claims?.sub;
+      const userId = req.user.id;
       const startDate = req.query.start ? new Date(req.query.start as string) : new Date();
       const endDate = req.query.end ? new Date(req.query.end as string) : new Date();
       
@@ -418,7 +405,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(404).json({ message: "Hearing not found" });
       }
       
-      const userId = req.user.id || req.user.claims?.sub;
+      const userId = req.user.id;
       if (hearing.userId !== userId) {
         return res.status(403).json({ message: "Not authorized" });
       }
@@ -432,7 +419,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
   app.post('/api/hearings', isAuthenticated, async (req: any, res) => {
     try {
-      const userId = req.user.id || req.user.claims?.sub;
+      const userId = req.user.id;
       const validatedData = insertHearingSchema.parse(req.body);
       
       // Verify case ownership
@@ -472,7 +459,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.put('/api/hearings/:id', isAuthenticated, async (req: any, res) => {
     try {
       const hearingId = parseInt(req.params.id);
-      const userId = req.user.id || req.user.claims?.sub;
+      const userId = req.user.id;
       
       // Verify ownership
       const existingHearing = await storage.getHearing(hearingId);
@@ -513,7 +500,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.delete('/api/hearings/:id', isAuthenticated, async (req: any, res) => {
     try {
       const hearingId = parseInt(req.params.id);
-      const userId = req.user.id || req.user.claims?.sub;
+      const userId = req.user.id;
       
       // Verify ownership
       const existingHearing = await storage.getHearing(hearingId);

@@ -1,9 +1,4 @@
 import {
-  users,
-  cases,
-  clients,
-  hearings,
-  activities,
   type User,
   type UpsertUser,
   type Case,
@@ -15,13 +10,13 @@ import {
   type Activity,
   type InsertActivity
 } from "@shared/schema";
-import { db } from "./db";
-import { eq, and, gte, desc, sql, like, ilike } from "drizzle-orm";
+import { v4 as uuidv4 } from 'uuid';
 
 // Interface for storage operations
 export interface IStorage {
   // User operations
   getUser(id: string): Promise<User | undefined>;
+  getUserByEmail(email: string): Promise<User | undefined>;
   upsertUser(user: UpsertUser): Promise<User>;
   
   // Case operations
@@ -68,302 +63,302 @@ export interface IStorage {
   }>;
 }
 
-export class DatabaseStorage implements IStorage {
+export class MemStorage implements IStorage {
+  private users: Map<string, User> = new Map();
+  private cases: Map<number, Case> = new Map();
+  private clients: Map<number, Client> = new Map();
+  private hearings: Map<number, Hearing> = new Map();
+  private activities: Map<number, Activity> = new Map();
+  private nextId = 1;
+
+  constructor() {
+    // Initialize with test user
+    this.users.set("test-user-id", {
+      id: "test-user-id",
+      email: "test@test.com",
+      firstName: "Test",
+      lastName: "User",
+      profileImageUrl: null,
+      createdAt: new Date(),
+      updatedAt: new Date()
+    });
+  }
+
   // User operations
   async getUser(id: string): Promise<User | undefined> {
-    const [user] = await db.select().from(users).where(eq(users.id, id));
-    return user;
+    return this.users.get(id);
+  }
+
+  async getUserByEmail(email: string): Promise<User | undefined> {
+    for (const user of this.users.values()) {
+      if (user.email === email) {
+        return user;
+      }
+    }
+    return undefined;
   }
 
   async upsertUser(userData: UpsertUser): Promise<User> {
-    const [user] = await db
-      .insert(users)
-      .values(userData)
-      .onConflictDoUpdate({
-        target: users.id,
-        set: {
-          ...userData,
-          updatedAt: new Date(),
-        },
-      })
-      .returning();
+    const existingUser = this.users.get(userData.id);
+    const user: User = {
+      ...userData,
+      createdAt: existingUser?.createdAt || new Date(),
+      updatedAt: new Date()
+    };
+    this.users.set(userData.id, user);
     return user;
   }
 
   // Case operations
   async getCases(userId: string): Promise<Case[]> {
-    return db.select().from(cases).where(eq(cases.userId, userId)).orderBy(desc(cases.updatedAt));
+    return Array.from(this.cases.values())
+      .filter(c => c.userId === userId)
+      .sort((a, b) => new Date(b.updatedAt!).getTime() - new Date(a.updatedAt!).getTime());
   }
 
   async getCase(id: number): Promise<Case | undefined> {
-    const [caseData] = await db.select().from(cases).where(eq(cases.id, id));
-    return caseData;
+    return this.cases.get(id);
   }
 
   async getUpcomingHearingCases(userId: string, limit = 5): Promise<Case[]> {
-    return db
-      .select()
-      .from(cases)
-      .where(
-        and(
-          eq(cases.userId, userId),
-          sql`${cases.nextHearingDate} IS NOT NULL AND ${cases.nextHearingDate} >= CURRENT_DATE`
-        )
-      )
-      .orderBy(cases.nextHearingDate)
-      .limit(limit);
+    const today = new Date();
+    return Array.from(this.cases.values())
+      .filter(c => c.userId === userId && c.nextHearingDate && new Date(c.nextHearingDate) >= today)
+      .sort((a, b) => new Date(a.nextHearingDate!).getTime() - new Date(b.nextHearingDate!).getTime())
+      .slice(0, limit);
   }
 
   async searchCases(userId: string, query: string): Promise<Case[]> {
-    return db
-      .select()
-      .from(cases)
-      .where(
-        and(
-          eq(cases.userId, userId),
-          sql`(${cases.caseNumber} ILIKE ${`%${query}%`} OR ${cases.title} ILIKE ${`%${query}%`})`
-        )
+    const lowerQuery = query.toLowerCase();
+    return Array.from(this.cases.values())
+      .filter(c => 
+        c.userId === userId && 
+        (c.caseNumber.toLowerCase().includes(lowerQuery) || 
+         c.title.toLowerCase().includes(lowerQuery))
       )
-      .orderBy(desc(cases.updatedAt));
+      .sort((a, b) => new Date(b.updatedAt!).getTime() - new Date(a.updatedAt!).getTime());
   }
 
   async filterCasesByStatus(userId: string, status: string): Promise<Case[]> {
-    return db
-      .select()
-      .from(cases)
-      .where(
-        and(
-          eq(cases.userId, userId),
-          eq(cases.status, status)
-        )
-      )
-      .orderBy(desc(cases.updatedAt));
+    return Array.from(this.cases.values())
+      .filter(c => c.userId === userId && c.status === status)
+      .sort((a, b) => new Date(b.updatedAt!).getTime() - new Date(a.updatedAt!).getTime());
   }
 
   async createCase(data: InsertCase & { userId: string }): Promise<Case> {
-    const [newCase] = await db.insert(cases).values(data).returning();
+    const id = this.nextId++;
+    const newCase: Case = {
+      id,
+      ...data,
+      createdAt: new Date(),
+      updatedAt: new Date()
+    };
+    this.cases.set(id, newCase);
     return newCase;
   }
 
   async updateCase(id: number, data: Partial<InsertCase>): Promise<Case | undefined> {
-    const [updatedCase] = await db
-      .update(cases)
-      .set({ ...data, updatedAt: new Date() })
-      .where(eq(cases.id, id))
-      .returning();
+    const existingCase = this.cases.get(id);
+    if (!existingCase) return undefined;
+    
+    const updatedCase: Case = {
+      ...existingCase,
+      ...data,
+      updatedAt: new Date()
+    };
+    this.cases.set(id, updatedCase);
     return updatedCase;
   }
 
   async deleteCase(id: number): Promise<boolean> {
-    const result = await db.delete(cases).where(eq(cases.id, id));
-    return result.count > 0;
+    return this.cases.delete(id);
   }
 
   async getCasesByClient(clientId: number): Promise<Case[]> {
-    return db
-      .select()
-      .from(cases)
-      .where(eq(cases.clientId, clientId))
-      .orderBy(desc(cases.updatedAt));
+    return Array.from(this.cases.values())
+      .filter(c => c.clientId === clientId)
+      .sort((a, b) => new Date(b.updatedAt!).getTime() - new Date(a.updatedAt!).getTime());
   }
 
   async getCasesByStatuses(userId: string): Promise<{ status: string; count: number }[]> {
-    const result = await db
-      .select({
-        status: cases.status,
-        count: sql<number>`COUNT(*)`,
-      })
-      .from(cases)
-      .where(eq(cases.userId, userId))
-      .groupBy(cases.status);
+    const statusCounts = new Map<string, number>();
+    Array.from(this.cases.values())
+      .filter(c => c.userId === userId)
+      .forEach(c => {
+        statusCounts.set(c.status, (statusCounts.get(c.status) || 0) + 1);
+      });
     
-    return result;
+    return Array.from(statusCounts.entries()).map(([status, count]) => ({ status, count }));
   }
 
   // Client operations
   async getClients(userId: string): Promise<Client[]> {
-    return db.select().from(clients).where(eq(clients.userId, userId)).orderBy(desc(clients.updatedAt));
+    return Array.from(this.clients.values())
+      .filter(c => c.userId === userId)
+      .sort((a, b) => new Date(b.updatedAt!).getTime() - new Date(a.updatedAt!).getTime());
   }
 
   async getClient(id: number): Promise<Client | undefined> {
-    const [client] = await db.select().from(clients).where(eq(clients.id, id));
-    return client;
+    return this.clients.get(id);
   }
 
-  async getRecentClients(userId: string, limit = 4): Promise<Client[]> {
-    return db
-      .select()
-      .from(clients)
-      .where(eq(clients.userId, userId))
-      .orderBy(desc(clients.updatedAt))
-      .limit(limit);
+  async getRecentClients(userId: string, limit = 5): Promise<Client[]> {
+    return Array.from(this.clients.values())
+      .filter(c => c.userId === userId)
+      .sort((a, b) => new Date(b.createdAt!).getTime() - new Date(a.createdAt!).getTime())
+      .slice(0, limit);
   }
 
   async searchClients(userId: string, query: string): Promise<Client[]> {
-    return db
-      .select()
-      .from(clients)
-      .where(
-        and(
-          eq(clients.userId, userId),
-          sql`(${clients.name} ILIKE ${`%${query}%`} OR ${clients.email} ILIKE ${`%${query}%`} OR ${clients.contactNumber} ILIKE ${`%${query}%`})`
-        )
+    const lowerQuery = query.toLowerCase();
+    return Array.from(this.clients.values())
+      .filter(c => 
+        c.userId === userId && 
+        (c.name.toLowerCase().includes(lowerQuery) || 
+         c.email?.toLowerCase().includes(lowerQuery) ||
+         c.contactNumber?.includes(query))
       )
-      .orderBy(desc(clients.updatedAt));
+      .sort((a, b) => new Date(b.updatedAt!).getTime() - new Date(a.updatedAt!).getTime());
   }
 
   async createClient(data: InsertClient & { userId: string }): Promise<Client> {
-    // Generate a random UUID for the client if not provided
-    const { v4: uuidv4 } = require('uuid');
-    const clientData = {
+    const id = this.nextId++;
+    const newClient: Client = {
+      id,
+      clientUuid: uuidv4(),
       ...data,
-      clientUuid: data.clientUuid || uuidv4()
+      createdAt: new Date(),
+      updatedAt: new Date()
     };
-    
-    const [newClient] = await db.insert(clients).values(clientData).returning();
+    this.clients.set(id, newClient);
     return newClient;
   }
 
   async updateClient(id: number, data: Partial<InsertClient>): Promise<Client | undefined> {
-    const [updatedClient] = await db
-      .update(clients)
-      .set({ ...data, updatedAt: new Date() })
-      .where(eq(clients.id, id))
-      .returning();
+    const existingClient = this.clients.get(id);
+    if (!existingClient) return undefined;
+    
+    const updatedClient: Client = {
+      ...existingClient,
+      ...data,
+      updatedAt: new Date()
+    };
+    this.clients.set(id, updatedClient);
     return updatedClient;
   }
 
   async deleteClient(id: number): Promise<boolean> {
-    const result = await db.delete(clients).where(eq(clients.id, id));
-    return result.count > 0;
+    return this.clients.delete(id);
   }
 
   // Hearing operations
   async getHearings(userId: string): Promise<Hearing[]> {
-    return db.select().from(hearings).where(eq(hearings.userId, userId)).orderBy(hearings.hearingDate);
+    return Array.from(this.hearings.values())
+      .filter(h => h.userId === userId)
+      .sort((a, b) => new Date(a.hearingDate).getTime() - new Date(b.hearingDate).getTime());
   }
 
   async getHearing(id: number): Promise<Hearing | undefined> {
-    const [hearing] = await db.select().from(hearings).where(eq(hearings.id, id));
-    return hearing;
+    return this.hearings.get(id);
   }
 
   async getUpcomingHearings(userId: string, limit = 5): Promise<Hearing[]> {
-    return db
-      .select()
-      .from(hearings)
-      .where(
-        and(
-          eq(hearings.userId, userId),
-          gte(hearings.hearingDate, new Date())
-        )
-      )
-      .orderBy(hearings.hearingDate)
-      .limit(limit);
+    const today = new Date();
+    return Array.from(this.hearings.values())
+      .filter(h => h.userId === userId && new Date(h.hearingDate) >= today)
+      .sort((a, b) => new Date(a.hearingDate).getTime() - new Date(b.hearingDate).getTime())
+      .slice(0, limit);
   }
 
   async getHearingsByCase(caseId: number): Promise<Hearing[]> {
-    return db
-      .select()
-      .from(hearings)
-      .where(eq(hearings.caseId, caseId))
-      .orderBy(hearings.hearingDate);
+    return Array.from(this.hearings.values())
+      .filter(h => h.caseId === caseId)
+      .sort((a, b) => new Date(a.hearingDate).getTime() - new Date(b.hearingDate).getTime());
   }
 
   async getHearingsByDateRange(userId: string, startDate: Date, endDate: Date): Promise<Hearing[]> {
-    return db
-      .select()
-      .from(hearings)
-      .where(
-        and(
-          eq(hearings.userId, userId),
-          sql`${hearings.hearingDate} >= ${startDate} AND ${hearings.hearingDate} <= ${endDate}`
-        )
-      )
-      .orderBy(hearings.hearingDate);
+    return Array.from(this.hearings.values())
+      .filter(h => {
+        const hearingDate = new Date(h.hearingDate);
+        return h.userId === userId && hearingDate >= startDate && hearingDate <= endDate;
+      })
+      .sort((a, b) => new Date(a.hearingDate).getTime() - new Date(b.hearingDate).getTime());
   }
 
   async createHearing(data: InsertHearing & { userId: string }): Promise<Hearing> {
-    const [newHearing] = await db.insert(hearings).values(data).returning();
+    const id = this.nextId++;
+    const newHearing: Hearing = {
+      id,
+      ...data,
+      createdAt: new Date(),
+      updatedAt: new Date()
+    };
+    this.hearings.set(id, newHearing);
     return newHearing;
   }
 
   async updateHearing(id: number, data: Partial<InsertHearing>): Promise<Hearing | undefined> {
-    const [updatedHearing] = await db
-      .update(hearings)
-      .set({ ...data, updatedAt: new Date() })
-      .where(eq(hearings.id, id))
-      .returning();
+    const existingHearing = this.hearings.get(id);
+    if (!existingHearing) return undefined;
+    
+    const updatedHearing: Hearing = {
+      ...existingHearing,
+      ...data,
+      updatedAt: new Date()
+    };
+    this.hearings.set(id, updatedHearing);
     return updatedHearing;
   }
 
   async deleteHearing(id: number): Promise<boolean> {
-    const result = await db.delete(hearings).where(eq(hearings.id, id));
-    return result.count > 0;
+    return this.hearings.delete(id);
   }
 
   // Activity operations
   async getActivities(userId: string, limit = 10): Promise<Activity[]> {
-    return db
-      .select()
-      .from(activities)
-      .where(eq(activities.userId, userId))
-      .orderBy(desc(activities.createdAt))
-      .limit(limit);
+    return Array.from(this.activities.values())
+      .filter(a => a.userId === userId)
+      .sort((a, b) => new Date(b.createdAt!).getTime() - new Date(a.createdAt!).getTime())
+      .slice(0, limit);
   }
 
   async createActivity(data: InsertActivity & { userId: string }): Promise<Activity> {
-    const [newActivity] = await db.insert(activities).values(data).returning();
+    const id = this.nextId++;
+    const newActivity: Activity = {
+      id,
+      ...data,
+      createdAt: new Date()
+    };
+    this.activities.set(id, newActivity);
     return newActivity;
   }
 
   // Dashboard operations
-  async getDashboardStats(userId: string): Promise<{
-    totalCases: number;
-    activeCases: number;
-    totalClients: number;
+  async getDashboardStats(userId: string): Promise<{ 
+    totalCases: number; 
+    activeCases: number; 
+    totalClients: number; 
     hearingsThisWeek: number;
   }> {
-    // Get total cases
-    const [totalCasesResult] = await db
-      .select({ count: sql<number>`COUNT(*)` })
-      .from(cases)
-      .where(eq(cases.userId, userId));
+    const userCases = Array.from(this.cases.values()).filter(c => c.userId === userId);
+    const userClients = Array.from(this.clients.values()).filter(c => c.userId === userId);
+    const userHearings = Array.from(this.hearings.values()).filter(h => h.userId === userId);
     
-    // Get active cases
-    const [activeCasesResult] = await db
-      .select({ count: sql<number>`COUNT(*)` })
-      .from(cases)
-      .where(and(eq(cases.userId, userId), eq(cases.status, 'Active')));
-    
-    // Get total clients
-    const [totalClientsResult] = await db
-      .select({ count: sql<number>`COUNT(*)` })
-      .from(clients)
-      .where(eq(clients.userId, userId));
-    
-    // Get hearings this week
     const today = new Date();
-    const endOfWeek = new Date();
-    endOfWeek.setDate(today.getDate() + 7);
+    const weekFromNow = new Date(today.getTime() + 7 * 24 * 60 * 60 * 1000);
     
-    const [hearingsThisWeekResult] = await db
-      .select({ count: sql<number>`COUNT(*)` })
-      .from(hearings)
-      .where(
-        and(
-          eq(hearings.userId, userId),
-          sql`${hearings.hearingDate} >= CURRENT_DATE AND ${hearings.hearingDate} <= ${endOfWeek}`
-        )
-      );
-    
+    const hearingsThisWeek = userHearings.filter(h => {
+      const hearingDate = new Date(h.hearingDate);
+      return hearingDate >= today && hearingDate <= weekFromNow;
+    }).length;
+
     return {
-      totalCases: totalCasesResult.count,
-      activeCases: activeCasesResult.count,
-      totalClients: totalClientsResult.count,
-      hearingsThisWeek: hearingsThisWeekResult.count,
+      totalCases: userCases.length,
+      activeCases: userCases.filter(c => c.status === 'Active' || c.status === 'Scheduled').length,
+      totalClients: userClients.length,
+      hearingsThisWeek
     };
   }
 }
 
-export const storage = new DatabaseStorage();
+export const storage = new MemStorage();
