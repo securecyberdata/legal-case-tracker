@@ -7,8 +7,9 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Input } from '@/components/ui/input';
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from '@/components/ui/form';
 import { useToast } from '@/hooks/use-toast';
-import { apiRequest } from '@/lib/queryClient';
+import { apiRequest, queryClient } from '@/lib/queryClient';
 import { Gavel } from 'lucide-react';
+import { useLocation } from 'wouter';
 
 const loginSchema = z.object({
   email: z.string().email('Please enter a valid email address'),
@@ -20,6 +21,7 @@ type LoginForm = z.infer<typeof loginSchema>;
 export default function Login() {
   const [isLoading, setIsLoading] = useState(false);
   const { toast } = useToast();
+  const [, navigate] = useLocation();
 
   const form = useForm<LoginForm>({
     resolver: zodResolver(loginSchema),
@@ -33,12 +35,17 @@ export default function Login() {
     setIsLoading(true);
     try {
       await apiRequest('POST', '/api/login', data);
+      
+      // Invalidate the auth query to refetch user data
+      await queryClient.invalidateQueries({ queryKey: ["/api/auth/user"] });
+      
       toast({
         title: 'Login successful',
         description: 'Welcome back!',
       });
-      // Refresh the page to trigger re-authentication
-      window.location.reload();
+      
+      // Navigate to dashboard instead of reloading
+      navigate('/');
     } catch (error) {
       console.error('Login error:', error);
       toast({

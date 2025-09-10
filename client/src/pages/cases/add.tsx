@@ -9,7 +9,9 @@ import {
   Building2, 
   Briefcase,
   ArrowLeft,
-  Upload
+  Upload,
+  FileText,
+  Download
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -41,8 +43,20 @@ import { apiRequest } from '@/lib/queryClient';
 import { generateCaseNumber, formatDate } from '@/lib/utils';
 import { CASE_STATUSES, COURT_TYPES, insertCaseSchema } from '@shared/schema';
 
-// Extend the schema with client-side validation
-const formSchema = insertCaseSchema.extend({
+// Create a form schema that accepts Date objects for dates
+const formSchema = z.object({
+  applicationNumber: z.string().optional(),
+  caseNumber: z.string().min(1, "Case number is required"),
+  firNumber: z.string().optional(),
+  plaintiffName: z.string().optional(),
+  defendantName: z.string().optional(),
+  title: z.string().min(1, "Title is required"),
+  description: z.string().optional(),
+  courtName: z.string().min(1, "Court name is required"),
+  courtType: z.enum(COURT_TYPES).optional(),
+  status: z.enum(CASE_STATUSES).default("Pending"),
+  filingDate: z.date().optional(),
+  nextHearingDate: z.date().optional(),
   clientId: z.number().optional(),
   documents: z.string().optional(),
   previousMessages: z.string().optional(),
@@ -76,12 +90,143 @@ export default function CaseAdd() {
     }
   });
 
+  // Document generation function
+  const generateDocument = async (docType: 'bail' | 'bail_before_arrest') => {
+    const formData = form.getValues();
+    
+    if (!formData.caseNumber || !formData.title || !formData.courtName) {
+      toast({
+        title: 'Missing Information',
+        description: 'Please fill in the case number, title, and court name before generating documents.',
+        variant: 'destructive',
+      });
+      return;
+    }
+    
+    try {
+      // Create document content using case data
+      const documentContent = createDocumentContent(docType, formData);
+      
+      // Create and download the document
+      downloadDocument(documentContent, `${docType}_${formData.caseNumber}.docx`);
+      
+      toast({
+        title: 'Document Generated',
+        description: `${docType === 'bail' ? 'Bail Application' : 'Bail Before Arrest'} document has been generated successfully.`,
+      });
+    } catch (error) {
+      console.error('Error generating document:', error);
+      toast({
+        title: 'Error',
+        description: 'Failed to generate document. Please try again.',
+        variant: 'destructive',
+      });
+    }
+  };
+
+  // Create document content based on case data
+  const createDocumentContent = (docType: 'bail' | 'bail_before_arrest', caseData: any) => {
+    const currentDate = new Date().toLocaleDateString('en-US', {
+      year: 'numeric',
+      month: 'long',
+      day: 'numeric'
+    });
+    
+    if (docType === 'bail') {
+      return `BAIL APPLICATION
+
+IN THE COURT OF ${caseData.courtName?.toUpperCase() || 'DISTRICT COURT'}
+
+Case No: ${caseData.caseNumber}
+Application No: ${caseData.applicationNumber || 'N/A'}
+FIR No: ${caseData.firNumber || 'N/A'}
+
+PETITIONER: ${caseData.plaintiffName || 'Applicant'}
+RESPONDENT: ${caseData.defendantName || 'State'}
+
+SUBJECT: Application for Grant of Bail
+
+Respected Sir/Madam,
+
+I, ${caseData.plaintiffName || 'the applicant'}, through my counsel, most respectfully submit as follows:
+
+1. That the above-mentioned case is pending before this Hon'ble Court.
+2. That the applicant is innocent and has been falsely implicated in this case.
+3. That the applicant undertakes to appear before the court on each and every date of hearing.
+4. That the applicant will not tamper with evidence or influence witnesses.
+5. That the applicant is ready to furnish any surety or bond as may be required by this Hon'ble Court.
+
+PRAYER:
+It is, therefore, most respectfully prayed that this Hon'ble Court may be pleased to grant bail to the applicant in the above-mentioned case.
+
+Date: ${currentDate}
+Place: ${caseData.courtName || 'Court'}
+
+Through Counsel
+${caseData.plaintiffName || 'Applicant'}`;
+    } else {
+      return `APPLICATION FOR BAIL BEFORE ARREST
+(ANTICIPATORY BAIL)
+
+IN THE COURT OF ${caseData.courtName?.toUpperCase() || 'DISTRICT COURT'}
+
+Case No: ${caseData.caseNumber}
+Application No: ${caseData.applicationNumber || 'N/A'}
+FIR No: ${caseData.firNumber || 'N/A'}
+
+PETITIONER: ${caseData.plaintiffName || 'Applicant'}
+RESPONDENT: ${caseData.defendantName || 'State'}
+
+SUBJECT: Application for Anticipatory Bail
+
+Respected Sir/Madam,
+
+I, ${caseData.plaintiffName || 'the applicant'}, through my counsel, most respectfully submit as follows:
+
+1. That the applicant has reasonable apprehension of arrest in connection with the above-mentioned case.
+2. That the applicant is innocent and has been falsely implicated in this case.
+3. That the applicant undertakes to cooperate with the investigation and appear before the court when required.
+4. That the applicant will not tamper with evidence or influence witnesses.
+5. That the applicant is ready to furnish any surety or bond as may be required by this Hon'ble Court.
+
+PRAYER:
+It is, therefore, most respectfully prayed that this Hon'ble Court may be pleased to grant anticipatory bail to the applicant in the above-mentioned case.
+
+Date: ${currentDate}
+Place: ${caseData.courtName || 'Court'}
+
+Through Counsel
+${caseData.plaintiffName || 'Applicant'}`;
+    }
+  };
+
+  // Download document function
+  const downloadDocument = (content: string, filename: string) => {
+    const element = document.createElement('a');
+    const file = new Blob([content], { type: 'text/plain' });
+    element.href = URL.createObjectURL(file);
+    element.download = filename;
+    document.body.appendChild(element);
+    element.click();
+    document.body.removeChild(element);
+  };
+
   // Form submission handler
   const onSubmit = async (data: z.infer<typeof formSchema>) => {
     setIsSubmitting(true);
     
     try {
-      const response = await apiRequest('POST', '/api/cases', data);
+      // Convert Date objects to ISO strings for the API
+      const processedData = {
+        ...data,
+        filingDate: data.filingDate ? new Date(data.filingDate).toISOString().split('T')[0] : undefined,
+        nextHearingDate: data.nextHearingDate ? new Date(data.nextHearingDate).toISOString().split('T')[0] : undefined,
+      };
+      
+      // Validate the processed data against the insertCaseSchema
+      const validatedData = insertCaseSchema.parse(processedData);
+      
+      const response = await apiRequest('POST', '/api/cases', validatedData);
       const newCase = await response.json();
       
       toast({
@@ -348,7 +493,7 @@ export default function CaseAdd() {
                         <PopoverContent className="w-auto p-0" align="start">
                           <Calendar
                             mode="single"
-                            selected={field.value ? new Date(field.value) : undefined}
+                            selected={field.value}
                             onSelect={field.onChange}
                             initialFocus
                           />
@@ -384,7 +529,7 @@ export default function CaseAdd() {
                         <PopoverContent className="w-auto p-0" align="start">
                           <Calendar
                             mode="single"
-                            selected={field.value ? new Date(field.value) : undefined}
+                            selected={field.value}
                             onSelect={field.onChange}
                             initialFocus
                           />
@@ -456,6 +601,49 @@ export default function CaseAdd() {
           </Card>
         </form>
       </Form>
+      
+      {/* Document Generation Section */}
+      <div className="mt-8">
+        <Card>
+          <CardHeader>
+            <CardTitle className="flex items-center space-x-2">
+              <FileText className="h-5 w-5" />
+              <span>Generate Legal Documents</span>
+            </CardTitle>
+            <CardDescription>
+              Generate legal documents using the case information you just created
+            </CardDescription>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <Button 
+                variant="outline" 
+                className="h-20 flex flex-col items-center justify-center space-y-2"
+                onClick={() => generateDocument('bail')}
+              >
+                <FileText className="h-6 w-6" />
+                <span>Bail Application</span>
+                <span className="text-xs text-muted-foreground">Generate bail application document</span>
+              </Button>
+              
+              <Button 
+                variant="outline" 
+                className="h-20 flex flex-col items-center justify-center space-y-2"
+                onClick={() => generateDocument('bail_before_arrest')}
+              >
+                <FileText className="h-6 w-6" />
+                <span>Bail Before Arrest</span>
+                <span className="text-xs text-muted-foreground">Generate anticipatory bail document</span>
+              </Button>
+            </div>
+            
+            <div className="text-sm text-muted-foreground">
+              <p>Note: Document generation will use the case details from the form above.</p>
+              <p>Make sure all required fields are filled before generating documents.</p>
+            </div>
+          </CardContent>
+        </Card>
+      </div>
     </div>
   );
 }

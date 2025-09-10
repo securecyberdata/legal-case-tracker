@@ -14,6 +14,7 @@ import CaseDetails from "@/pages/cases/[id]";
 import ClientsIndex from "@/pages/clients/index";
 import ClientAdd from "@/pages/clients/add";
 import Calendar from "@/pages/calendar";
+import Settings from "@/pages/settings";
 import Login from "@/pages/login";
 
 // Protected route component
@@ -55,20 +56,53 @@ function Router() {
     <Switch>
       <Route path="/login" component={Login} />
       
-      <Route path="/">
+      <Route path="/" component={() => (
         <ProtectedRoute component={Layout}>
-          <Switch>
-            <Route path="/" component={Dashboard} />
-            <Route path="/cases" component={CasesIndex} />
-            <Route path="/cases/add" component={CaseAdd} />
-            <Route path="/cases/:id" component={CaseDetails} />
-            <Route path="/clients" component={ClientsIndex} />
-            <Route path="/clients/add" component={ClientAdd} />
-            <Route path="/calendar" component={Calendar} />
-            <Route component={NotFound} />
-          </Switch>
+          <Dashboard />
         </ProtectedRoute>
-      </Route>
+      )} />
+      
+      <Route path="/cases" component={() => (
+        <ProtectedRoute component={Layout}>
+          <CasesIndex />
+        </ProtectedRoute>
+      )} />
+      
+      <Route path="/cases/add" component={() => (
+        <ProtectedRoute component={Layout}>
+          <CaseAdd />
+        </ProtectedRoute>
+      )} />
+      
+      <Route path="/cases/:id" component={() => (
+        <ProtectedRoute component={Layout}>
+          <CaseDetails />
+        </ProtectedRoute>
+      )} />
+      
+      <Route path="/clients" component={() => (
+        <ProtectedRoute component={Layout}>
+          <ClientsIndex />
+        </ProtectedRoute>
+      )} />
+      
+      <Route path="/clients/add" component={() => (
+        <ProtectedRoute component={Layout}>
+          <ClientAdd />
+        </ProtectedRoute>
+      )} />
+      
+      <Route path="/calendar" component={() => (
+        <ProtectedRoute component={Layout}>
+          <Calendar />
+        </ProtectedRoute>
+      )} />
+      
+      <Route path="/settings" component={() => (
+        <ProtectedRoute component={Layout}>
+          <Settings />
+        </ProtectedRoute>
+      )} />
       
       <Route component={NotFound} />
     </Switch>

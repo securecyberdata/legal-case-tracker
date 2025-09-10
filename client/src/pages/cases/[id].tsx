@@ -20,6 +20,7 @@ import {
   ClipboardList,
   GavelIcon,
   ExternalLink,
+  FileText,
 } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
@@ -78,9 +79,13 @@ import type { Case, Hearing } from "@shared/schema";
 // Extend case schema for editing
 const editCaseSchema = insertCaseSchema.partial();
 
-// Extend hearing schema
-const hearingFormSchema = insertHearingSchema.extend({
+// Create a hearing form schema that accepts Date objects for dates
+const hearingFormSchema = z.object({
+  caseId: z.number(),
+  hearingDate: z.date(),
   time: z.string().min(1, "Time is required"),
+  notes: z.string().optional(),
+  status: z.string().default("Scheduled"),
 });
 
 export default function CaseDetails() {
@@ -221,10 +226,131 @@ export default function CaseDetails() {
     }
   };
 
+  // Document generation function
+  const generateDocument = async (docType: 'bail' | 'bail_before_arrest') => {
+    if (!caseData) return;
+    
+    try {
+      // Create document content using case data
+      const documentContent = createDocumentContent(docType, caseData);
+      
+      // Create and download the document
+      downloadDocument(documentContent, `${docType}_${caseData.caseNumber}.docx`);
+      
+      toast({
+        title: 'Document Generated',
+        description: `${docType === 'bail' ? 'Bail Application' : 'Bail Before Arrest'} document has been generated successfully.`,
+      });
+    } catch (error) {
+      console.error('Error generating document:', error);
+      toast({
+        title: 'Error',
+        description: 'Failed to generate document. Please try again.',
+        variant: 'destructive',
+      });
+    }
+  };
+
+  // Create document content based on case data
+  const createDocumentContent = (docType: 'bail' | 'bail_before_arrest', caseData: Case) => {
+    const currentDate = new Date().toLocaleDateString('en-US', {
+      year: 'numeric',
+      month: 'long',
+      day: 'numeric'
+    });
+    
+    if (docType === 'bail') {
+      return `BAIL APPLICATION
+
+IN THE COURT OF ${caseData.courtName?.toUpperCase() || 'DISTRICT COURT'}
+
+Case No: ${caseData.caseNumber}
+Application No: ${caseData.applicationNumber || 'N/A'}
+FIR No: ${caseData.firNumber || 'N/A'}
+
+PETITIONER: ${caseData.plaintiffName || 'Applicant'}
+RESPONDENT: ${caseData.defendantName || 'State'}
+
+SUBJECT: Application for Grant of Bail
+
+Respected Sir/Madam,
+
+I, ${caseData.plaintiffName || 'the applicant'}, through my counsel, most respectfully submit as follows:
+
+1. That the above-mentioned case is pending before this Hon'ble Court.
+2. That the applicant is innocent and has been falsely implicated in this case.
+3. That the applicant undertakes to appear before the court on each and every date of hearing.
+4. That the applicant will not tamper with evidence or influence witnesses.
+5. That the applicant is ready to furnish any surety or bond as may be required by this Hon'ble Court.
+
+PRAYER:
+It is, therefore, most respectfully prayed that this Hon'ble Court may be pleased to grant bail to the applicant in the above-mentioned case.
+
+Date: ${currentDate}
+Place: ${caseData.courtName || 'Court'}
+
+Through Counsel
+${caseData.plaintiffName || 'Applicant'}`;
+    } else {
+      return `APPLICATION FOR BAIL BEFORE ARREST
+(ANTICIPATORY BAIL)
+
+IN THE COURT OF ${caseData.courtName?.toUpperCase() || 'DISTRICT COURT'}
+
+Case No: ${caseData.caseNumber}
+Application No: ${caseData.applicationNumber || 'N/A'}
+FIR No: ${caseData.firNumber || 'N/A'}
+
+PETITIONER: ${caseData.plaintiffName || 'Applicant'}
+RESPONDENT: ${caseData.defendantName || 'State'}
+
+SUBJECT: Application for Anticipatory Bail
+
+Respected Sir/Madam,
+
+I, ${caseData.plaintiffName || 'the applicant'}, through my counsel, most respectfully submit as follows:
+
+1. That the applicant has reasonable apprehension of arrest in connection with the above-mentioned case.
+2. That the applicant is innocent and has been falsely implicated in this case.
+3. That the applicant undertakes to cooperate with the investigation and appear before the court when required.
+4. That the applicant will not tamper with evidence or influence witnesses.
+5. That the applicant is ready to furnish any surety or bond as may be required by this Hon'ble Court.
+
+PRAYER:
+It is, therefore, most respectfully prayed that this Hon'ble Court may be pleased to grant anticipatory bail to the applicant in the above-mentioned case.
+
+Date: ${currentDate}
+Place: ${caseData.courtName || 'Court'}
+
+Through Counsel
+${caseData.plaintiffName || 'Applicant'}`;
+    }
+  };
+
+  // Download document function
+  const downloadDocument = (content: string, filename: string) => {
+    const element = document.createElement('a');
+    const file = new Blob([content], { type: 'text/plain' });
+    element.href = URL.createObjectURL(file);
+    element.download = filename;
+    document.body.appendChild(element);
+    element.click();
+    document.body.removeChild(element);
+  };
+
   // Handle adding a new hearing
   const onAddHearing = async (data: z.infer<typeof hearingFormSchema>) => {
     try {
-      await apiRequest("POST", "/api/hearings", data);
+      // Convert Date object to ISO string for the API
+      const processedData = {
+        ...data,
+        hearingDate: data.hearingDate ? new Date(data.hearingDate).toISOString().split('T')[0] : undefined,
+      };
+      
+      // Validate against the insertHearingSchema
+      const validatedData = insertHearingSchema.parse(processedData);
+      
+      await apiRequest("POST", "/api/hearings", validatedData);
 
       toast({
         title: "Hearing scheduled",
@@ -706,7 +832,7 @@ export default function CaseDetails() {
                 <Card>
                   <CardHeader className="pb-3">
                     <div className="flex justify-between items-center">
-                      <CardTitle>Case Documents</CardTitle>
+                      <CardTitle>Generate Legal Documents</CardTitle>
                       <Button disabled>
                         <FilePlus className="h-4 w-4 mr-2" />
                         Add Document
@@ -714,15 +840,40 @@ export default function CaseDetails() {
                     </div>
                   </CardHeader>
                   <CardContent>
-                    <div className="text-center py-6">
-                      <h3 className="text-lg font-medium text-neutral-dark mb-2">No documents yet</h3>
-                      <p className="text-sm text-neutral mb-4">
-                        There are no documents attached to this case.
-                      </p>
-                      <Button variant="outline" disabled>
-                        <FilePlus className="h-4 w-4 mr-2" />
-                        Upload Document
-                      </Button>
+                    <div className="space-y-6">
+                      <div className="text-center py-4">
+                        <h3 className="text-lg font-medium text-neutral-dark mb-2">Generate Legal Documents</h3>
+                        <p className="text-sm text-neutral mb-6">
+                          Generate professional legal documents using the case information.
+                        </p>
+                      </div>
+                      
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                        <Button 
+                          variant="outline" 
+                          className="h-24 flex flex-col items-center justify-center space-y-2"
+                          onClick={() => generateDocument('bail')}
+                        >
+                          <FileText className="h-6 w-6" />
+                          <span>Bail Application</span>
+                          <span className="text-xs text-muted-foreground">Generate bail application document</span>
+                        </Button>
+                        
+                        <Button 
+                          variant="outline" 
+                          className="h-24 flex flex-col items-center justify-center space-y-2"
+                          onClick={() => generateDocument('bail_before_arrest')}
+                        >
+                          <FileText className="h-6 w-6" />
+                          <span>Bail Before Arrest</span>
+                          <span className="text-xs text-muted-foreground">Generate anticipatory bail document</span>
+                        </Button>
+                      </div>
+                      
+                      <div className="text-sm text-muted-foreground text-center">
+                        <p>Documents will be generated using the case information and automatically downloaded.</p>
+                        <p>Make sure all case details are complete before generating documents.</p>
+                      </div>
                     </div>
                   </CardContent>
                 </Card>
@@ -781,13 +932,25 @@ export default function CaseDetails() {
                   <Calendar className="h-4 w-4 mr-2" />
                   Schedule Hearing
                 </Button>
+                <Button 
+                  className="w-full justify-start" 
+                  variant="outline"
+                  onClick={() => generateDocument('bail')}
+                >
+                  <FileText className="h-4 w-4 mr-2" />
+                  Generate Bail Application
+                </Button>
+                <Button 
+                  className="w-full justify-start" 
+                  variant="outline"
+                  onClick={() => generateDocument('bail_before_arrest')}
+                >
+                  <FileText className="h-4 w-4 mr-2" />
+                  Generate Bail Before Arrest
+                </Button>
                 <Button className="w-full justify-start" variant="outline" disabled>
                   <Clock className="h-4 w-4 mr-2" />
                   Set Reminder
-                </Button>
-                <Button className="w-full justify-start" variant="outline" disabled>
-                  <FilePlus className="h-4 w-4 mr-2" />
-                  Add Document
                 </Button>
               </CardContent>
             </Card>
@@ -877,7 +1040,7 @@ export default function CaseDetails() {
                       <PopoverContent className="w-auto p-0" align="start">
                         <CalendarComponent
                           mode="single"
-                          selected={field.value ? new Date(field.value) : undefined}
+                          selected={field.value}
                           onSelect={field.onChange}
                           initialFocus
                           disabled={(date) => date < new Date(new Date().setHours(0, 0, 0, 0))}

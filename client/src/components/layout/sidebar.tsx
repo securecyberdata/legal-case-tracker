@@ -9,7 +9,8 @@ import {
   Users, 
   CalendarDays, 
   Settings,
-  ChevronLeft
+  ChevronLeft,
+  FileText
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Avatar, AvatarImage, AvatarFallback } from "@/components/ui/avatar";
@@ -98,6 +99,31 @@ function SidebarContent({ location, user, navItems }: SidebarContentProps) {
             </Link>
           ))}
         </nav>
+        
+        {/* Generate Documents Section */}
+        <div className="mt-8 px-2">
+          <h3 className="text-xs font-semibold text-neutral-lighter uppercase tracking-wider mb-3">
+            Generate Documents
+          </h3>
+          <div className="space-y-1">
+            <Button 
+              variant="ghost" 
+              className="w-full justify-start text-white hover:bg-primary-light hover:text-white"
+              onClick={() => window.location.href = '/cases'}
+            >
+              <FileText className="h-4 w-4 mr-2" />
+              Bail Applications
+            </Button>
+            <Button 
+              variant="ghost" 
+              className="w-full justify-start text-white hover:bg-primary-light hover:text-white"
+              onClick={() => window.location.href = '/cases'}
+            >
+              <FileText className="h-4 w-4 mr-2" />
+              Legal Documents
+            </Button>
+          </div>
+        </div>
       </div>
       
       {/* User Profile */}
