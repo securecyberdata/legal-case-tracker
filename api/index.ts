@@ -4,7 +4,7 @@ import { insertCaseSchema, insertClientSchema, insertHearingSchema } from '../sh
 import { format } from 'date-fns';
 
 // Simple session management for Vercel
-const sessions = new Map<string, { userId: number; expires: number }>();
+const sessions = new Map<string, { userId: string; expires: number }>();
 
 function getSessionId(req: VercelRequest): string | null {
   return req.headers.cookie
@@ -13,7 +13,7 @@ function getSessionId(req: VercelRequest): string | null {
     ?.split('=')[1] || null;
 }
 
-function setSession(res: VercelResponse, userId: number): string {
+function setSession(res: VercelResponse, userId: string): string {
   const sessionId = Math.random().toString(36).substring(2, 15);
   const expires = Date.now() + 7 * 24 * 60 * 60 * 1000; // 7 days
   sessions.set(sessionId, { userId, expires });
@@ -22,7 +22,7 @@ function setSession(res: VercelResponse, userId: number): string {
   return sessionId;
 }
 
-function isAuthenticated(req: VercelRequest): { userId: number } | null {
+function isAuthenticated(req: VercelRequest): { userId: string } | null {
   const sessionId = getSessionId(req);
   if (!sessionId) return null;
   
@@ -49,6 +49,8 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
   const { pathname } = new URL(req.url!, `http://${req.headers.host}`);
   const path = pathname.replace('/api/', '');
+  
+  console.log(`API Request: ${req.method} ${path}`, { body: req.body, query: req.query });
 
   try {
     switch (path) {
@@ -97,11 +99,22 @@ async function handleLogin(req: VercelRequest, res: VercelResponse) {
   const { email, password } = req.body;
   
   if (email === 'test@test.com' && password === 'test123') {
-    const user = await storage.getUserByEmail(email);
-    if (user) {
-      setSession(res, user.id);
-      return res.json({ success: true, user });
-    }
+    // Create or get test user
+    const testUser = {
+      id: 'test-user-id',
+      email: 'test@test.com',
+      firstName: 'Test',
+      lastName: 'User',
+      profileImageUrl: null,
+      createdAt: new Date(),
+      updatedAt: new Date()
+    };
+    
+    // Upsert the user to ensure it exists
+    await storage.upsertUser(testUser);
+    
+    setSession(res, testUser.id);
+    return res.json({ success: true, user: testUser });
   }
   
   res.status(401).json({ message: 'Invalid credentials' });
