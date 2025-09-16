@@ -3,6 +3,7 @@ import { drizzle } from 'drizzle-orm/neon-serverless';
 import ws from "ws";
 import * as schema from "@shared/schema";
 
+// Configure Neon for WebSocket support (required for serverless)
 neonConfig.webSocketConstructor = ws;
 
 if (!process.env.DATABASE_URL) {
@@ -16,9 +17,18 @@ let pool: Pool | null = null;
 
 export function getPool() {
   if (!pool) {
-    pool = new Pool({ connectionString: process.env.DATABASE_URL });
+    pool = new Pool({ 
+      connectionString: process.env.DATABASE_URL,
+      // Additional Neon-specific configuration
+      ssl: true,
+    });
   }
   return pool;
 }
 
-export const db = drizzle({ client: getPool(), schema });
+export const db = drizzle({ 
+  client: getPool(), 
+  schema,
+  // Enable logging in development
+  logger: process.env.NODE_ENV === 'development'
+});
