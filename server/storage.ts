@@ -102,6 +102,10 @@ export class MemStorage implements IStorage {
     const existingUser = this.users.get(userData.id);
     const user: User = {
       ...userData,
+      email: userData.email ?? null,
+      firstName: userData.firstName ?? null,
+      lastName: userData.lastName ?? null,
+      profileImageUrl: userData.profileImageUrl ?? null,
       createdAt: existingUser?.createdAt || new Date(),
       updatedAt: new Date()
     };
@@ -290,6 +294,10 @@ export class MemStorage implements IStorage {
     const newHearing: Hearing = {
       id,
       ...data,
+      status: data.status ?? null,
+      time: data.time ?? null,
+      notes: data.notes ?? null,
+      userId: data.userId ?? null,
       createdAt: new Date(),
       updatedAt: new Date()
     };
@@ -327,6 +335,8 @@ export class MemStorage implements IStorage {
     const newActivity: Activity = {
       id,
       ...data,
+      details: data.details ?? null,
+      userId: data.userId ?? null,
       createdAt: new Date()
     };
     this.activities.set(id, newActivity);
