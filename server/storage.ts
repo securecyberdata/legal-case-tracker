@@ -153,7 +153,22 @@ export class MemStorage implements IStorage {
     const id = this.nextId++;
     const newCase: Case = {
       id,
-      ...data,
+      applicationNumber: data.applicationNumber ?? null,
+      caseNumber: data.caseNumber,
+      firNumber: data.firNumber ?? null,
+      plaintiffName: data.plaintiffName ?? null,
+      defendantName: data.defendantName ?? null,
+      title: data.title,
+      description: data.description ?? null,
+      courtName: data.courtName,
+      courtType: data.courtType ?? null,
+      status: data.status ?? "Pending",
+      filingDate: data.filingDate ?? null,
+      nextHearingDate: data.nextHearingDate ?? null,
+      clientId: data.clientId ?? null,
+      documents: data.documents ?? null,
+      previousMessages: data.previousMessages ?? null,
+      userId: data.userId ?? null,
       createdAt: new Date(),
       updatedAt: new Date()
     };
@@ -168,6 +183,17 @@ export class MemStorage implements IStorage {
     const updatedCase: Case = {
       ...existingCase,
       ...data,
+      applicationNumber: data.applicationNumber ?? existingCase.applicationNumber,
+      firNumber: data.firNumber ?? existingCase.firNumber,
+      plaintiffName: data.plaintiffName ?? existingCase.plaintiffName,
+      defendantName: data.defendantName ?? existingCase.defendantName,
+      description: data.description ?? existingCase.description,
+      courtType: data.courtType ?? existingCase.courtType,
+      filingDate: data.filingDate ?? existingCase.filingDate,
+      nextHearingDate: data.nextHearingDate ?? existingCase.nextHearingDate,
+      clientId: data.clientId ?? existingCase.clientId,
+      documents: data.documents ?? existingCase.documents,
+      previousMessages: data.previousMessages ?? existingCase.previousMessages,
       updatedAt: new Date()
     };
     this.cases.set(id, updatedCase);
@@ -230,7 +256,11 @@ export class MemStorage implements IStorage {
     const newClient: Client = {
       id,
       clientUuid: uuidv4(),
-      ...data,
+      name: data.name,
+      contactNumber: data.contactNumber ?? null,
+      email: data.email ?? null,
+      address: data.address ?? null,
+      userId: data.userId ?? null,
       createdAt: new Date(),
       updatedAt: new Date()
     };
@@ -245,6 +275,9 @@ export class MemStorage implements IStorage {
     const updatedClient: Client = {
       ...existingClient,
       ...data,
+      contactNumber: data.contactNumber ?? existingClient.contactNumber,
+      email: data.email ?? existingClient.email,
+      address: data.address ?? existingClient.address,
       updatedAt: new Date()
     };
     this.clients.set(id, updatedClient);
