@@ -1,10 +1,24 @@
 import type { VercelRequest, VercelResponse } from '@vercel/node';
-import { DatabaseStorage } from '../server/db-storage.js';
+// Lazy-load storage to avoid ESM path resolution surprises in Vercel runtime
+type DatabaseStorageType = any;
+let storageInstance: DatabaseStorageType | null = null;
+async function getStorage(): Promise<DatabaseStorageType> {
+  if (storageInstance) return storageInstance;
+  try {
+    const mod = await import('../server/db-storage.js');
+    storageInstance = new mod.DatabaseStorage();
+    return storageInstance;
+  } catch (_e1) {
+    // Fallback without extension if bundler stripped it
+    const mod = await import('../server/db-storage');
+    storageInstance = new mod.DatabaseStorage();
+    return storageInstance;
+  }
+}
 import { insertCaseSchema, insertClientSchema, insertHearingSchema } from '../shared/schema.js';
 import { format } from 'date-fns';
 
-// Use database storage for Vercel deployment
-const storage = new DatabaseStorage();
+// storage will be initialized lazily via getStorage()
 
 import { db } from '../server/db.js';
 import { sessions } from '../shared/schema.js';
@@ -101,25 +115,28 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       return res.status(500).json({ message: 'Database configuration error' });
     }
 
+    // Acquire storage once per request
+    const storage = await getStorage();
+
     switch (path) {
       case 'login':
-        return await handleLogin(req, res);
+        return await handleLogin(req, res, storage);
       case 'logout':
         return await handleLogout(req, res);
       case 'auth/user':
-        return await handleGetUser(req, res);
+        return await handleGetUser(req, res, storage);
       case 'dashboard/stats':
-        return await handleDashboardStats(req, res);
+        return await handleDashboardStats(req, res, storage);
       case 'dashboard/case-statuses':
-        return await handleCaseStatuses(req, res);
+        return await handleCaseStatuses(req, res, storage);
       case 'activities':
-        return await handleActivities(req, res);
+        return await handleActivities(req, res, storage);
       case 'cases':
-        return await handleCases(req, res);
+        return await handleCases(req, res, storage);
       case 'clients':
-        return await handleClients(req, res);
+        return await handleClients(req, res, storage);
       case 'hearings':
-        return await handleHearings(req, res);
+        return await handleHearings(req, res, storage);
       default:
         if (path.startsWith('cases/')) {
           return await handleCaseById(req, res, path);
@@ -137,13 +154,13 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     console.error('API Error:', error);
     return res.status(500).json({ 
       message: 'Internal server error',
-      error: process.env.NODE_ENV === 'development' ? error.message : undefined
+      error: process.env.NODE_ENV === 'development' ? (error as any)?.message : undefined
     });
   }
 }
 
 // Auth handlers
-async function handleLogin(req: VercelRequest, res: VercelResponse) {
+async function handleLogin(req: VercelRequest, res: VercelResponse, storage: DatabaseStorageType) {
   console.log('Login handler called:', { method: req.method, body: req.body });
   
   if (req.method !== 'POST') {
@@ -188,7 +205,7 @@ async function handleLogin(req: VercelRequest, res: VercelResponse) {
     console.error('Login error:', error);
     return res.status(500).json({ 
       message: 'Login failed', 
-      error: process.env.NODE_ENV === 'development' ? error.message : undefined 
+      error: process.env.NODE_ENV === 'development' ? (error as any)?.message : undefined 
     });
   }
 }
@@ -208,7 +225,7 @@ async function handleLogout(req: VercelRequest, res: VercelResponse) {
   res.json({ success: true });
 }
 
-async function handleGetUser(req: VercelRequest, res: VercelResponse) {
+async function handleGetUser(req: VercelRequest, res: VercelResponse, storage: DatabaseStorageType) {
   if (req.method !== 'GET') {
     return res.status(405).json({ message: 'Method not allowed' });
   }
@@ -227,7 +244,7 @@ async function handleGetUser(req: VercelRequest, res: VercelResponse) {
 }
 
 // Dashboard handlers
-async function handleDashboardStats(req: VercelRequest, res: VercelResponse) {
+async function handleDashboardStats(req: VercelRequest, res: VercelResponse, storage: DatabaseStorageType) {
   if (req.method !== 'GET') {
     return res.status(405).json({ message: 'Method not allowed' });
   }
@@ -241,7 +258,7 @@ async function handleDashboardStats(req: VercelRequest, res: VercelResponse) {
   res.json(stats);
 }
 
-async function handleCaseStatuses(req: VercelRequest, res: VercelResponse) {
+async function handleCaseStatuses(req: VercelRequest, res: VercelResponse, storage: DatabaseStorageType) {
   if (req.method !== 'GET') {
     return res.status(405).json({ message: 'Method not allowed' });
   }
@@ -255,7 +272,7 @@ async function handleCaseStatuses(req: VercelRequest, res: VercelResponse) {
   res.json(statuses);
 }
 
-async function handleActivities(req: VercelRequest, res: VercelResponse) {
+async function handleActivities(req: VercelRequest, res: VercelResponse, storage: DatabaseStorageType) {
   if (req.method !== 'GET') {
     return res.status(405).json({ message: 'Method not allowed' });
   }
@@ -271,7 +288,7 @@ async function handleActivities(req: VercelRequest, res: VercelResponse) {
 }
 
 // Cases handlers
-async function handleCases(req: VercelRequest, res: VercelResponse) {
+async function handleCases(req: VercelRequest, res: VercelResponse, storage: DatabaseStorageType) {
   const auth = await isAuthenticated(req);
   if (!auth) {
     return res.status(401).json({ message: 'Unauthorized' });
@@ -387,7 +404,7 @@ async function handleCaseById(req: VercelRequest, res: VercelResponse, path: str
 }
 
 // Clients handlers
-async function handleClients(req: VercelRequest, res: VercelResponse) {
+async function handleClients(req: VercelRequest, res: VercelResponse, storage: DatabaseStorageType) {
   const auth = await isAuthenticated(req);
   if (!auth) {
     return res.status(401).json({ message: 'Unauthorized' });
@@ -501,7 +518,7 @@ async function handleClientById(req: VercelRequest, res: VercelResponse, path: s
 }
 
 // Hearings handlers
-async function handleHearings(req: VercelRequest, res: VercelResponse) {
+async function handleHearings(req: VercelRequest, res: VercelResponse, storage: DatabaseStorageType) {
   const auth = await isAuthenticated(req);
   if (!auth) {
     return res.status(401).json({ message: 'Unauthorized' });
