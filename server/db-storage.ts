@@ -1,4 +1,4 @@
-import { db } from "./db";
+import { db } from "./db.js";
 import { 
   users, 
   cases, 
@@ -15,7 +15,7 @@ import {
   type InsertHearing,
   type Activity,
   type InsertActivity
-} from "@shared/schema";
+} from "../shared/schema.js";
 import { eq, desc, like, or, and, gte, lte, sql } from "drizzle-orm";
 import type { IStorage } from "./storage";
 
@@ -115,11 +115,7 @@ export class DatabaseStorage implements IStorage {
   async createCase(data: InsertCase & { userId: string }): Promise<Case> {
     const result = await db
       .insert(cases)
-      .values({
-        ...data,
-        createdAt: new Date(),
-        updatedAt: new Date()
-      })
+      .values({ ...(data as any) })
       .returning();
     
     return result[0];
@@ -208,11 +204,7 @@ export class DatabaseStorage implements IStorage {
   async createClient(data: InsertClient & { userId: string }): Promise<Client> {
     const result = await db
       .insert(clients)
-      .values({
-        ...data,
-        createdAt: new Date(),
-        updatedAt: new Date()
-      })
+      .values({ ...(data as any) })
       .returning();
     
     return result[0];
@@ -293,11 +285,7 @@ export class DatabaseStorage implements IStorage {
   async createHearing(data: InsertHearing & { userId: string }): Promise<Hearing> {
     const result = await db
       .insert(hearings)
-      .values({
-        ...data,
-        createdAt: new Date(),
-        updatedAt: new Date()
-      })
+      .values({ ...(data as any) })
       .returning();
     
     return result[0];
@@ -334,10 +322,7 @@ export class DatabaseStorage implements IStorage {
   async createActivity(data: InsertActivity & { userId: string }): Promise<Activity> {
     const result = await db
       .insert(activities)
-      .values({
-        ...data,
-        createdAt: new Date()
-      })
+      .values({ ...(data as any) })
       .returning();
     
     return result[0];

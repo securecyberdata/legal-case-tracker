@@ -1,13 +1,13 @@
 import type { VercelRequest, VercelResponse } from '@vercel/node';
-import { DatabaseStorage } from '../server/db-storage';
-import { insertCaseSchema, insertClientSchema, insertHearingSchema } from '../shared/schema';
+import { DatabaseStorage } from '../server/db-storage.js';
+import { insertCaseSchema, insertClientSchema, insertHearingSchema } from '../shared/schema.js';
 import { format } from 'date-fns';
 
 // Use database storage for Vercel deployment
 const storage = new DatabaseStorage();
 
-import { db } from '../server/db';
-import { sessions } from '../shared/schema';
+import { db } from '../server/db.js';
+import { sessions } from '../shared/schema.js';
 import { eq, lt } from 'drizzle-orm';
 
 function getSessionId(req: VercelRequest): string | null {
