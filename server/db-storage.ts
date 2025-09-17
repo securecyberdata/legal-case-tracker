@@ -126,12 +126,13 @@ export class DatabaseStorage implements IStorage {
   }
 
   async updateCase(id: number, data: Partial<InsertCase>): Promise<Case | undefined> {
+    const updateValues: any = { ...data, updatedAt: new Date() };
+    if ((data as any).nextHearingDate instanceof Date) {
+      updateValues.nextHearingDate = (data as any).nextHearingDate.toISOString().slice(0, 10);
+    }
     const result = await db
       .update(cases)
-      .set({
-        ...data,
-        updatedAt: new Date()
-      })
+      .set(updateValues)
       .where(eq(cases.id, id))
       .returning();
     
@@ -140,7 +141,7 @@ export class DatabaseStorage implements IStorage {
 
   async deleteCase(id: number): Promise<boolean> {
     const result = await db.delete(cases).where(eq(cases.id, id));
-    return result.rowCount > 0;
+    return (result.rowCount ?? 0) > 0;
   }
 
   async getCasesByClient(clientId: number): Promise<Case[]> {
@@ -232,7 +233,7 @@ export class DatabaseStorage implements IStorage {
 
   async deleteClient(id: number): Promise<boolean> {
     const result = await db.delete(clients).where(eq(clients.id, id));
-    return result.rowCount > 0;
+    return (result.rowCount ?? 0) > 0;
   }
 
   // Hearing operations
@@ -251,13 +252,14 @@ export class DatabaseStorage implements IStorage {
 
   async getUpcomingHearings(userId: string, limit = 5): Promise<Hearing[]> {
     const today = new Date();
+    const todayStr = today.toISOString().slice(0, 10);
     return await db
       .select()
       .from(hearings)
       .where(
         and(
           eq(hearings.userId, userId),
-          gte(hearings.hearingDate, today)
+          gte(hearings.hearingDate, todayStr)
         )
       )
       .orderBy(hearings.hearingDate)
@@ -316,7 +318,7 @@ export class DatabaseStorage implements IStorage {
 
   async deleteHearing(id: number): Promise<boolean> {
     const result = await db.delete(hearings).where(eq(hearings.id, id));
-    return result.rowCount > 0;
+    return (result.rowCount ?? 0) > 0;
   }
 
   // Activity operations
