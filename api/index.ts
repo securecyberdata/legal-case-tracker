@@ -139,13 +139,13 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         return await handleHearings(req, res, storage);
       default:
         if (path.startsWith('cases/')) {
-          return await handleCaseById(req, res, path);
+          return await handleCaseById(req, res, path, storage);
         }
         if (path.startsWith('clients/')) {
-          return await handleClientById(req, res, path);
+          return await handleClientById(req, res, path, storage);
         }
         if (path.startsWith('hearings/')) {
-          return await handleHearingById(req, res, path);
+          return await handleHearingById(req, res, path, storage);
         }
         console.log(`No handler found for path: ${path}`);
         return res.status(404).json({ message: `Not found: ${path}` });
@@ -328,7 +328,7 @@ async function handleCases(req: VercelRequest, res: VercelResponse, storage: Dat
   res.status(405).json({ message: 'Method not allowed' });
 }
 
-async function handleCaseById(req: VercelRequest, res: VercelResponse, path: string) {
+async function handleCaseById(req: VercelRequest, res: VercelResponse, path: string, storage: DatabaseStorageType) {
   const auth = await isAuthenticated(req);
   if (!auth) {
     return res.status(401).json({ message: 'Unauthorized' });
@@ -441,7 +441,7 @@ async function handleClients(req: VercelRequest, res: VercelResponse, storage: D
   res.status(405).json({ message: 'Method not allowed' });
 }
 
-async function handleClientById(req: VercelRequest, res: VercelResponse, path: string) {
+async function handleClientById(req: VercelRequest, res: VercelResponse, path: string, storage: DatabaseStorageType) {
   const auth = await isAuthenticated(req);
   if (!auth) {
     return res.status(401).json({ message: 'Unauthorized' });
@@ -575,7 +575,7 @@ async function handleHearings(req: VercelRequest, res: VercelResponse, storage: 
   res.status(405).json({ message: 'Method not allowed' });
 }
 
-async function handleHearingById(req: VercelRequest, res: VercelResponse, path: string) {
+async function handleHearingById(req: VercelRequest, res: VercelResponse, path: string, storage: DatabaseStorageType) {
   const auth = await isAuthenticated(req);
   if (!auth) {
     return res.status(401).json({ message: 'Unauthorized' });
