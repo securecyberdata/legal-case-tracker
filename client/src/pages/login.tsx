@@ -34,10 +34,16 @@ export default function Login() {
   const onSubmit = async (data: LoginForm) => {
     setIsLoading(true);
     try {
-      await apiRequest('POST', '/api/login', data);
+      const res = await apiRequest('POST', '/api/login', data);
+      const payload = await res.json().catch(() => ({}));
+      const user = (payload && payload.user) ? payload.user : null;
       
-      // Invalidate the auth query to refetch user data
-      await queryClient.invalidateQueries({ queryKey: ["/api/auth/user"] });
+      // Immediately prime auth cache to avoid redirect race
+      if (user) {
+        queryClient.setQueryData(["/api/auth/user"], user);
+      } else {
+        await queryClient.invalidateQueries({ queryKey: ["/api/auth/user"] });
+      }
       
       toast({
         title: 'Login successful',
