@@ -155,7 +155,8 @@ async function handleLogout(req: VercelRequest, res: VercelResponse) {
 
   const sessionId = getSessionId(req);
   if (sessionId) {
-    sessions.delete(sessionId);
+    // Delete session from database
+    await db.delete(sessions).where(eq(sessions.sid, sessionId));
   }
   
   res.setHeader('Set-Cookie', 'sessionId=; HttpOnly; Path=/; Max-Age=0');
