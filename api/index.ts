@@ -75,12 +75,32 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     return;
   }
 
-  const { pathname } = new URL(req.url!, `http://${req.headers.host}`);
-  const path = pathname.replace('/api/', '');
+  // Parse the path more reliably
+  let path: string;
+  try {
+    const url = new URL(req.url!, `http://${req.headers.host || 'localhost'}`);
+    path = url.pathname.replace(/^\/api\//, '');
+  } catch (e) {
+    // Fallback if URL parsing fails
+    path = (req.url || '').replace(/^\/api\//, '');
+  }
   
-  console.log(`API Request: ${req.method} ${path}`, { body: req.body, query: req.query });
+  console.log(`API Request: ${req.method} /${path}`, { 
+    url: req.url, 
+    headers: req.headers, 
+    body: req.body, 
+    query: req.query,
+    env: process.env.NODE_ENV,
+    dbUrl: process.env.DATABASE_URL ? 'Set' : 'Not Set'
+  });
 
   try {
+    // Ensure database connection is working
+    if (!process.env.DATABASE_URL) {
+      console.error('DATABASE_URL is not set');
+      return res.status(500).json({ message: 'Database configuration error' });
+    }
+
     switch (path) {
       case 'login':
         return await handleLogin(req, res);
@@ -110,42 +130,67 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         if (path.startsWith('hearings/')) {
           return await handleHearingById(req, res, path);
         }
-        res.status(404).json({ message: 'Not found' });
+        console.log(`No handler found for path: ${path}`);
+        return res.status(404).json({ message: `Not found: ${path}` });
     }
   } catch (error) {
     console.error('API Error:', error);
-    res.status(500).json({ message: 'Internal server error' });
+    return res.status(500).json({ 
+      message: 'Internal server error',
+      error: process.env.NODE_ENV === 'development' ? error.message : undefined
+    });
   }
 }
 
 // Auth handlers
 async function handleLogin(req: VercelRequest, res: VercelResponse) {
+  console.log('Login handler called:', { method: req.method, body: req.body });
+  
   if (req.method !== 'POST') {
     return res.status(405).json({ message: 'Method not allowed' });
   }
 
-  const { email, password } = req.body;
-  
-  if (email === 'test@test.com' && password === 'test123') {
-    // Create or get test user
-    const testUser = {
-      id: 'test-user-id',
-      email: 'test@test.com',
-      firstName: 'Test',
-      lastName: 'User',
-      profileImageUrl: null,
-      createdAt: new Date(),
-      updatedAt: new Date()
-    };
+  try {
+    const { email, password } = req.body;
     
-    // Upsert the user to ensure it exists
-    await storage.upsertUser(testUser);
+    console.log('Login attempt:', { email, passwordProvided: !!password });
     
-    await setSession(res, testUser.id);
-    return res.json({ success: true, user: testUser });
+    if (email === 'test@test.com' && password === 'test123') {
+      // Create or get test user
+      const testUser = {
+        id: 'test-user-id',
+        email: 'test@test.com',
+        firstName: 'Test',
+        lastName: 'User',
+        profileImageUrl: null,
+        createdAt: new Date(),
+        updatedAt: new Date()
+      };
+      
+      console.log('Test user credentials matched, upserting user...');
+      
+      // Upsert the user to ensure it exists
+      await storage.upsertUser(testUser);
+      
+      console.log('User upserted, setting session...');
+      
+      await setSession(res, testUser.id);
+      
+      console.log('Session set, returning success response');
+      
+      return res.json({ success: true, user: testUser });
+    }
+    
+    console.log('Invalid credentials provided');
+    return res.status(401).json({ message: 'Invalid credentials' });
+    
+  } catch (error) {
+    console.error('Login error:', error);
+    return res.status(500).json({ 
+      message: 'Login failed', 
+      error: process.env.NODE_ENV === 'development' ? error.message : undefined 
+    });
   }
-  
-  res.status(401).json({ message: 'Invalid credentials' });
 }
 
 async function handleLogout(req: VercelRequest, res: VercelResponse) {
