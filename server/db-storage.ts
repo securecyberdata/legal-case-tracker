@@ -69,13 +69,14 @@ export class DatabaseStorage implements IStorage {
 
   async getUpcomingHearingCases(userId: string, limit = 5): Promise<Case[]> {
     const today = new Date();
+    const todayStr = today.toISOString().slice(0, 10);
     return await db
       .select()
       .from(cases)
       .where(
         and(
           eq(cases.userId, userId),
-          gte(cases.nextHearingDate, today)
+          gte(cases.nextHearingDate, todayStr)
         )
       )
       .orderBy(cases.nextHearingDate)
@@ -272,14 +273,16 @@ export class DatabaseStorage implements IStorage {
   }
 
   async getHearingsByDateRange(userId: string, startDate: Date, endDate: Date): Promise<Hearing[]> {
+    const startStr = startDate.toISOString().slice(0, 10);
+    const endStr = endDate.toISOString().slice(0, 10);
     return await db
       .select()
       .from(hearings)
       .where(
         and(
           eq(hearings.userId, userId),
-          gte(hearings.hearingDate, startDate),
-          lte(hearings.hearingDate, endDate)
+          gte(hearings.hearingDate, startStr),
+          lte(hearings.hearingDate, endStr)
         )
       )
       .orderBy(hearings.hearingDate);
@@ -347,6 +350,8 @@ export class DatabaseStorage implements IStorage {
   }> {
     const today = new Date();
     const weekFromNow = new Date(today.getTime() + 7 * 24 * 60 * 60 * 1000);
+    const todayStr = today.toISOString().slice(0, 10);
+    const weekFromNowStr = weekFromNow.toISOString().slice(0, 10);
 
     const [totalCasesResult] = await db
       .select({ count: sql<number>`count(*)`.mapWith(Number) })
@@ -377,8 +382,8 @@ export class DatabaseStorage implements IStorage {
       .where(
         and(
           eq(hearings.userId, userId),
-          gte(hearings.hearingDate, today),
-          lte(hearings.hearingDate, weekFromNow)
+          gte(hearings.hearingDate, todayStr),
+          lte(hearings.hearingDate, weekFromNowStr)
         )
       );
 

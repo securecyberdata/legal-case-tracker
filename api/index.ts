@@ -532,10 +532,15 @@ async function handleHearings(req: VercelRequest, res: VercelResponse) {
       return res.status(403).json({ message: 'Not authorized' });
     }
     
-    const newHearing = await storage.createHearing({ ...validatedData, userId: auth.userId });
+    // Ensure date persisted as YYYY-MM-DD (string)
+    const normalized = {
+      ...validatedData,
+      hearingDate: new Date(validatedData.hearingDate).toISOString().slice(0, 10),
+    } as any;
+    const newHearing = await storage.createHearing({ ...normalized, userId: auth.userId });
     
     await storage.updateCase(validatedData.caseId, { 
-      nextHearingDate: new Date(validatedData.hearingDate),
+      nextHearingDate: new Date(validatedData.hearingDate).toISOString().slice(0, 10),
       status: 'Scheduled'
     });
     
@@ -589,11 +594,16 @@ async function handleHearingById(req: VercelRequest, res: VercelResponse, path: 
     }
     
     const validatedData = insertHearingSchema.partial().parse(req.body);
-    const updatedHearing = await storage.updateHearing(hearingId, validatedData);
+    const updatedHearing = await storage.updateHearing(hearingId, {
+      ...validatedData,
+      ...(validatedData.hearingDate
+        ? { hearingDate: new Date(validatedData.hearingDate).toISOString().slice(0, 10) }
+        : {}),
+    } as any);
     
     if (validatedData.hearingDate) {
       await storage.updateCase(existingHearing.caseId, { 
-        nextHearingDate: new Date(validatedData.hearingDate)
+        nextHearingDate: new Date(validatedData.hearingDate).toISOString().slice(0, 10)
       });
     }
     
