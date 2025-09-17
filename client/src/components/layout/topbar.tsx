@@ -19,7 +19,7 @@ interface TopbarProps {
 }
 
 export default function Topbar({ onMenuClick, onSearch }: TopbarProps) {
-  const { user } = useAuth();
+  const { user, logout } = useAuth();
   const [searchQuery, setSearchQuery] = useState("");
 
   const handleSearch = (e: React.FormEvent) => {
@@ -110,8 +110,8 @@ export default function Topbar({ onMenuClick, onSearch }: TopbarProps) {
                   {user?.firstName ? `${user.firstName} ${user.lastName || ''}` : (user?.email || 'User')}
                 </DropdownMenuLabel>
                 <DropdownMenuSeparator />
-                <DropdownMenuItem asChild>
-                  <a href="/api/logout">Logout</a>
+                <DropdownMenuItem onClick={(e) => { e.preventDefault(); logout(); }}>
+                  Logout
                 </DropdownMenuItem>
               </DropdownMenuContent>
             </DropdownMenu>
