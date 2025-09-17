@@ -1,10 +1,14 @@
 import type { VercelRequest, VercelResponse } from '@vercel/node';
-import { storage } from '../server/storage';
+import { DatabaseStorage } from '../server/db-storage';
 import { insertCaseSchema, insertClientSchema, insertHearingSchema } from '../shared/schema';
 import { format } from 'date-fns';
 
-// Simple session management for Vercel
-const sessions = new Map<string, { userId: string; expires: number }>();
+// Use database storage for Vercel deployment
+const storage = new DatabaseStorage();
+
+import { db } from '../server/db';
+import { sessions } from '../shared/schema';
+import { eq, lt } from 'drizzle-orm';
 
 function getSessionId(req: VercelRequest): string | null {
   return req.headers.cookie
@@ -13,26 +17,50 @@ function getSessionId(req: VercelRequest): string | null {
     ?.split('=')[1] || null;
 }
 
-function setSession(res: VercelResponse, userId: string): string {
+async function setSession(res: VercelResponse, userId: string): Promise<string> {
   const sessionId = Math.random().toString(36).substring(2, 15);
-  const expires = Date.now() + 7 * 24 * 60 * 60 * 1000; // 7 days
-  sessions.set(sessionId, { userId, expires });
+  const expires = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000); // 7 days
+  
+  // Store session in database
+  await db.insert(sessions).values({
+    sid: sessionId,
+    sess: { userId },
+    expire: expires
+  }).onConflictDoUpdate({
+    target: sessions.sid,
+    set: {
+      sess: { userId },
+      expire: expires
+    }
+  });
   
   res.setHeader('Set-Cookie', `sessionId=${sessionId}; HttpOnly; Path=/; Max-Age=${7 * 24 * 60 * 60}; SameSite=Lax`);
   return sessionId;
 }
 
-function isAuthenticated(req: VercelRequest): { userId: string } | null {
+async function isAuthenticated(req: VercelRequest): Promise<{ userId: string } | null> {
   const sessionId = getSessionId(req);
   if (!sessionId) return null;
   
-  const session = sessions.get(sessionId);
-  if (!session || session.expires < Date.now()) {
-    sessions.delete(sessionId);
+  // Clean up expired sessions
+  await db.delete(sessions).where(lt(sessions.expire, new Date()));
+  
+  // Get session from database
+  const sessionResult = await db
+    .select()
+    .from(sessions)
+    .where(eq(sessions.sid, sessionId))
+    .limit(1);
+  
+  const session = sessionResult[0];
+  if (!session || session.expire < new Date()) {
+    if (session) {
+      await db.delete(sessions).where(eq(sessions.sid, sessionId));
+    }
     return null;
   }
   
-  return { userId: session.userId };
+  return { userId: (session.sess as any).userId };
 }
 
 export default async function handler(req: VercelRequest, res: VercelResponse) {
@@ -113,7 +141,7 @@ async function handleLogin(req: VercelRequest, res: VercelResponse) {
     // Upsert the user to ensure it exists
     await storage.upsertUser(testUser);
     
-    setSession(res, testUser.id);
+    await setSession(res, testUser.id);
     return res.json({ success: true, user: testUser });
   }
   
@@ -139,7 +167,7 @@ async function handleGetUser(req: VercelRequest, res: VercelResponse) {
     return res.status(405).json({ message: 'Method not allowed' });
   }
 
-  const auth = isAuthenticated(req);
+  const auth = await isAuthenticated(req);
   if (!auth) {
     return res.status(401).json({ message: 'Unauthorized' });
   }
@@ -158,7 +186,7 @@ async function handleDashboardStats(req: VercelRequest, res: VercelResponse) {
     return res.status(405).json({ message: 'Method not allowed' });
   }
 
-  const auth = isAuthenticated(req);
+  const auth = await isAuthenticated(req);
   if (!auth) {
     return res.status(401).json({ message: 'Unauthorized' });
   }
@@ -172,7 +200,7 @@ async function handleCaseStatuses(req: VercelRequest, res: VercelResponse) {
     return res.status(405).json({ message: 'Method not allowed' });
   }
 
-  const auth = isAuthenticated(req);
+  const auth = await isAuthenticated(req);
   if (!auth) {
     return res.status(401).json({ message: 'Unauthorized' });
   }
@@ -186,7 +214,7 @@ async function handleActivities(req: VercelRequest, res: VercelResponse) {
     return res.status(405).json({ message: 'Method not allowed' });
   }
 
-  const auth = isAuthenticated(req);
+  const auth = await isAuthenticated(req);
   if (!auth) {
     return res.status(401).json({ message: 'Unauthorized' });
   }
@@ -198,7 +226,7 @@ async function handleActivities(req: VercelRequest, res: VercelResponse) {
 
 // Cases handlers
 async function handleCases(req: VercelRequest, res: VercelResponse) {
-  const auth = isAuthenticated(req);
+  const auth = await isAuthenticated(req);
   if (!auth) {
     return res.status(401).json({ message: 'Unauthorized' });
   }
@@ -238,7 +266,7 @@ async function handleCases(req: VercelRequest, res: VercelResponse) {
 }
 
 async function handleCaseById(req: VercelRequest, res: VercelResponse, path: string) {
-  const auth = isAuthenticated(req);
+  const auth = await isAuthenticated(req);
   if (!auth) {
     return res.status(401).json({ message: 'Unauthorized' });
   }
@@ -314,7 +342,7 @@ async function handleCaseById(req: VercelRequest, res: VercelResponse, path: str
 
 // Clients handlers
 async function handleClients(req: VercelRequest, res: VercelResponse) {
-  const auth = isAuthenticated(req);
+  const auth = await isAuthenticated(req);
   if (!auth) {
     return res.status(401).json({ message: 'Unauthorized' });
   }
@@ -351,7 +379,7 @@ async function handleClients(req: VercelRequest, res: VercelResponse) {
 }
 
 async function handleClientById(req: VercelRequest, res: VercelResponse, path: string) {
-  const auth = isAuthenticated(req);
+  const auth = await isAuthenticated(req);
   if (!auth) {
     return res.status(401).json({ message: 'Unauthorized' });
   }
@@ -428,7 +456,7 @@ async function handleClientById(req: VercelRequest, res: VercelResponse, path: s
 
 // Hearings handlers
 async function handleHearings(req: VercelRequest, res: VercelResponse) {
-  const auth = isAuthenticated(req);
+  const auth = await isAuthenticated(req);
   if (!auth) {
     return res.status(401).json({ message: 'Unauthorized' });
   }
@@ -480,7 +508,7 @@ async function handleHearings(req: VercelRequest, res: VercelResponse) {
 }
 
 async function handleHearingById(req: VercelRequest, res: VercelResponse, path: string) {
-  const auth = isAuthenticated(req);
+  const auth = await isAuthenticated(req);
   if (!auth) {
     return res.status(401).json({ message: 'Unauthorized' });
   }
